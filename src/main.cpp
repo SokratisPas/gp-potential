@@ -14,12 +14,13 @@
 
 
 /* TO DO
-- check problem with npt 100k data
+- add 2 element parser
+- add more primitives 
+- in geneticProgram.h make the primitives come from the primitives.h file
 - make fitnes function better (MSE, complexity penalty)
 - add crossover max depth
 - add max depth in general
 - make multiprocessing optimizations
-- add SUM opperator
 */ 
 
 
