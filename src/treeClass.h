@@ -15,6 +15,12 @@ public:
 	double constant = 0.0;	// usefull only if primitive is constant
 
 	std::vector<std::shared_ptr<Node>> children;
+
+	// in "GeneticProgram::ReplaceInd" we use "std::find" 
+	// so we need the == and != operators
+	// so we define them for Individual, Tree, Node
+	bool operator==(const Node& other) const;
+	bool operator!=(const Node& other) const;
 };
 
 // --------------------------------------------------------
@@ -33,6 +39,10 @@ struct NodeLocation
 class Tree {
 public:
 	std::shared_ptr<Node> root;
+	
+	// we need == and != check explanation in Node
+	bool operator==(const Tree& other) const;
+	bool operator!=(const Tree& other) const;
 
 	int Size() const;	
 	int Depth() const;	
@@ -64,6 +74,49 @@ private:
 		std::vector<NodeLocation>& nodes) const;	
 };
 
+
+// ==============================
+bool Node::operator==(const Node& other) const
+{
+	if (primitive != other.primitive || constant != other.constant || children.size() != other.children.size())
+		return false;
+
+	for (size_t i = 0; i < children.size(); ++i)
+	{
+		if (!children[i] || !other.children[i])
+		{
+			if (children[i] != other.children[i])
+				return false;
+			continue;
+		}
+
+		if (*children[i] != *other.children[i])
+			return false;
+	}
+
+	return true;
+}
+
+// ==============================
+bool Node::operator!=(const Node& other) const
+{
+	return !(*this == other);
+}
+
+// ==============================
+bool Tree::operator==(const Tree& other) const
+{
+	if (!root || !other.root)
+		return root == other.root;
+
+	return *root == *other.root;
+}
+
+// ==============================
+bool Tree::operator!=(const Tree& other) const
+{
+	return !(*this == other);
+}
 
 // ==============================
 int Tree::Size() const

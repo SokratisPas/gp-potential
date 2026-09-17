@@ -17,36 +17,34 @@ class GeneticProgram {
 public:
     std::vector<Individual> population;
 
-    void InitializePopulation();
-    void EvaluatePopulation();
     void Run();
-
+    
     // Constructor
     GeneticProgram(int populationSize,
-                   int generations, 
-                   int initialIndMaxDepth,
-                   int tournamentSize,
-                   double mutationProbability,
-                   std::pair<double, double> constRange,
-                   const std::vector<std::vector<PairDistanceData>>& data,
-                   std::function<double(
-                        const std::array<Tree,4>&, 
-                        const std::vector<std::vector<PairDistanceData>>&)> 
-                        fitnessFunction)
-        :
-        populationSize(populationSize),
-        generations(generations),
-        initialIndMaxDepth(initialIndMaxDepth),
-        tournamentSize(tournamentSize),
-        mutationProbability(mutationProbability),
-        constRange(constRange),
-        data(data),
-        fitnessFunction(fitnessFunction),
-        rng(std::random_device{}())   // initialize rng in constructor
-    {
-    }
-
-
+        int generations, 
+        int initialIndMaxDepth,
+        int tournamentSize,
+        double mutationProbability,
+        std::pair<double, double> constRange,
+        const std::vector<std::vector<PairDistanceData>>& data,
+        std::function<double(
+            const std::array<Tree,4>&, 
+            const std::vector<std::vector<PairDistanceData>>&)> 
+            fitnessFunction)
+            :
+            populationSize(populationSize),
+            generations(generations),
+            initialIndMaxDepth(initialIndMaxDepth),
+            tournamentSize(tournamentSize),
+            mutationProbability(mutationProbability),
+            constRange(constRange),
+            data(data),
+            fitnessFunction(fitnessFunction),
+            rng(std::random_device{}())   // initialize rng in constructor
+            {
+            }
+            
+            
 private:
     int populationSize;
     int generations;
@@ -54,16 +52,29 @@ private:
     int tournamentSize;
     double mutationProbability;
     std::pair<double, double> constRange;
-    const std::vector<std::vector<PairDistanceData>>& data;
-
+    const std::vector<std::vector<PairDistanceData>>& data;    
     std::mt19937 rng;   // each GeneticProgram has unique rng
 
+    // primitive functions (update when adding new primitives in primitives.h)
+    // (also update the function "Tree::nodeTypeToString" to print the tree)
+    std::vector<const Primitive*> functions =
+    {
+        &Add,
+        &Sub,
+        &Mul,
+        &Div,
+        &Inv6,
+        &Inv12
+    };
+    
     // fitness function
     std::function<double(
         const std::array<Tree,4>&, 
         const std::vector<std::vector<PairDistanceData>>&)>
         fitnessFunction;
-
+        
+    void InitializePopulation();
+    void EvaluatePopulation();
     void EvaluateIndividual(Individual& individual);
 
     const Individual& TournamentSelection();
@@ -142,16 +153,6 @@ std::shared_ptr<Node> GeneticProgram::GenerateRandomNode(int depth)
     }
 
     // choose primitive function
-    std::vector<const Primitive*> functions =
-    {
-        &Add,
-        &Sub,
-        &Mul,
-        &Div,
-        &Inv6,
-        &Inv12
-    };
-
     std::uniform_int_distribution<int> funcDist(0, functions.size() - 1);
 
     node->primitive = functions[funcDist(rng)];
@@ -308,6 +309,17 @@ Individual GeneticProgram::Mutate(const Individual& parent, int caseInd)
     Individual child = parent;
     child.trees[caseInd] = parent.trees[caseInd].Clone();
 
+    // Guard against empty/default trees that can exist before a real parent is assigned.
+    // (probably solved)
+    if (!child.trees[caseInd].root)
+    {
+        child.trees[caseInd].root = GenerateRandomNode(3);
+        child.evaluated = false;
+        child.fitness = std::numeric_limits<double>::infinity();
+        child.energyLoss = 0.0;
+        return child;
+    }
+
     // Collect all nodes
     auto nodes = child.trees[caseInd].CollectNodes();
 
@@ -396,7 +408,7 @@ void GeneticProgram::Run()
         //          Mutation
         if (RandomDouble(0.0, 1.0) < mutationProbability)
         {
-            Individual child1;
+            Individual child1 = parent1;
 
             for (int caseInd = 0; caseInd < 4; caseInd++)
             {

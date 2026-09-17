@@ -15,8 +15,10 @@
 
 /* TO DO
 - add 2 element parser
+- add Ptournament (and Temperature)
+- make input/output files 
+- python runner
 - add more primitives 
-- in geneticProgram.h make the primitives come from the primitives.h file
 - make fitnes function better (MSE, complexity penalty)
 - add crossover max depth
 - add max depth in general
@@ -72,13 +74,19 @@ int main()
 		<< "=======================================\n";
 	for (auto& genPop : geneticProgram.population)
 	{
-		genPop.tree.printTree();
-		std::cout << "\tFitness : "
-			<< genPop.fitness
-			<< "\n";
+		for (int caseInd = 0; caseInd < 4; caseInd++)
+		{
+			std::cout << "Tree: " 
+				<< caseInd << "\n";
+
+			genPop.trees[caseInd].printTree();
+
+			std::cout << "\nFitness : "
+				<< genPop.fitness
+				<< "\n";
+		}
+		std::cout << "---------------------------------------\n";
 	}
-
-
 
 	return 0;
 }

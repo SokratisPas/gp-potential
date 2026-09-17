@@ -7,9 +7,12 @@
 constexpr double compPar = 0.3;
 
 // -----------------------------------------------
-double fitnessFunction(const Tree& tree, 
+double fitnessFunction(const std::array<Tree,4>& trees, 
 	const std::vector<std::vector<PairDistanceData>>& data)
 {
+	// Note : the fittnes is wrong, need to create a neighbor for each atom
+	// and to choose which tree to use + the general tree.
+	
 	double totalLossEnergySqr = 0.0;
 	int numSnapShots = 0;
 
@@ -24,7 +27,7 @@ double fitnessFunction(const Tree& tree,
             // loop over precomputed distances
             for (double r : snapshot.distances)
             {
-                double V = tree.evaluate(r);
+                double V = trees[0].evaluate(r);
 
                 energyCand += V;
             }
@@ -40,7 +43,7 @@ double fitnessFunction(const Tree& tree,
 		totalLossEnergySqr += lossSimSqr;
 	}
 
-	double lossSize = compPar * tree.Size();
+	double lossSize = compPar * trees[0].Size();
 
 	double totalLoss =
 		totalLossEnergySqr / static_cast<double>(numSnapShots)
