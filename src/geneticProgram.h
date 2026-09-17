@@ -26,12 +26,11 @@ public:
                    int generations, 
                    int initialIndMaxDepth,
                    int tournamentSize,
-                   double crossoverProbability,
                    double mutationProbability,
                    std::pair<double, double> constRange,
                    const std::vector<std::vector<PairDistanceData>>& data,
                    std::function<double(
-                        const Tree&, 
+                        const std::array<Tree,4>&, 
                         const std::vector<std::vector<PairDistanceData>>&)> 
                         fitnessFunction)
         :
@@ -39,7 +38,6 @@ public:
         generations(generations),
         initialIndMaxDepth(initialIndMaxDepth),
         tournamentSize(tournamentSize),
-        crossoverProbability(crossoverProbability),
         mutationProbability(mutationProbability),
         constRange(constRange),
         data(data),
@@ -54,7 +52,6 @@ private:
     int generations;
     int initialIndMaxDepth;    // depth of initial individuals
     int tournamentSize;
-    double crossoverProbability;
     double mutationProbability;
     std::pair<double, double> constRange;
     const std::vector<std::vector<PairDistanceData>>& data;
@@ -63,7 +60,7 @@ private:
 
     // fitness function
     std::function<double(
-        const Tree&, 
+        const std::array<Tree,4>&, 
         const std::vector<std::vector<PairDistanceData>>&)>
         fitnessFunction;
 
@@ -72,15 +69,18 @@ private:
     const Individual& TournamentSelection();
 
     std::pair<Individual, Individual> Crossover(const Individual& parent1,
-                                                const Individual& parent2);
+                                                const Individual& parent2,
+                                                int caseInd);
 
-    Individual Mutate(const Individual& parent);
+    Individual Mutate(const Individual& parent, int caseInd);
 
     double RandomDouble(double min, double max);
 
-    const Individual& BestIndividual() const;
-
     std::shared_ptr<Node> GenerateRandomNode(int depth);
+
+    void ReplaceInd(const Individual& newInd, const Individual& oldInd);  
+
+    void SortPopulation();
 };
 
 
@@ -179,13 +179,17 @@ void GeneticProgram::InitializePopulation()
     {
         Individual ind;
 
-        Tree tree;
+        // generate random individual with 4 trees 
+        for (int j = 0; j < 4; j++)
+        {
+            Tree tree;
 
-        // generate random node in (1, initialIndMaxDepth)
-        std::uniform_int_distribution<int> indDist(1, initialIndMaxDepth);
-        tree.root = GenerateRandomNode(indDist(rng));
+            // generate random node in (1, initialIndMaxDepth)
+            std::uniform_int_distribution<int> indDist(1, initialIndMaxDepth);
+            tree.root = GenerateRandomNode(indDist(rng));
 
-        ind.tree = tree;
+            ind.trees[j] = tree;
+        }
 
         population.push_back(ind);
     }
@@ -197,7 +201,7 @@ void GeneticProgram::EvaluateIndividual(Individual& individual)
     if (individual.evaluated)   // already evaluated fitness
         return;
 
-    individual.fitness = fitnessFunction(individual.tree, data);
+    individual.fitness = fitnessFunction(individual.trees, data);
     individual.evaluated = true;
 }
 
@@ -233,18 +237,19 @@ const Individual& GeneticProgram::TournamentSelection()
 // ================================
 std::pair<Individual, Individual> GeneticProgram::Crossover(
     const Individual& parent1,
-    const Individual& parent2)
+    const Individual& parent2,
+    int caseInd)
 {
     // clone the parents
     Individual child1 = parent1;
     Individual child2 = parent2;
 
-    child1.tree = parent1.tree.Clone();
-    child2.tree = parent2.tree.Clone();
+    child1.trees[caseInd] = parent1.trees[caseInd].Clone();
+    child2.trees[caseInd] = parent2.trees[caseInd].Clone();
 
     // collect all the nodes
-    auto nodes1 = child1.tree.CollectNodes();
-    auto nodes2 = child2.tree.CollectNodes();
+    auto nodes1 = child1.trees[caseInd].CollectNodes();
+    auto nodes2 = child2.trees[caseInd].CollectNodes();
 
     // catch empty nodes
     if (nodes1.empty() || nodes2.empty())
@@ -259,15 +264,15 @@ std::pair<Individual, Individual> GeneticProgram::Crossover(
     NodeLocation point2 = nodes2[dist2(rng)];
 
     // clone the selected subtrees
-    auto subtree1 = child1.tree.CloneNode(point1.node);
-    auto subtree2 = child2.tree.CloneNode(point2.node);
+    auto subtree1 = child1.trees[caseInd].CloneNode(point1.node);
+    auto subtree2 = child2.trees[caseInd].CloneNode(point2.node);
 
     // replace subtrees for children
     // 
     // child 1
     if (point1.parent == nullptr)   // we chose the root
     {
-        child1.tree.root = subtree2;
+        child1.trees[caseInd].root = subtree2;
     }
     else                            // we chose some other node
     {
@@ -276,7 +281,7 @@ std::pair<Individual, Individual> GeneticProgram::Crossover(
     // child 2
     if (point2.parent == nullptr)
     {
-        child2.tree.root = subtree1;
+        child2.trees[caseInd].root = subtree1;
     }
     else
     {
@@ -287,27 +292,24 @@ std::pair<Individual, Individual> GeneticProgram::Crossover(
     child1.evaluated = false;
     child2.evaluated = false;
 
-    child1.fitness = 1e6;
-    child2.fitness = 1e6;
+    child1.fitness = std::numeric_limits<double>::infinity();
+    child2.fitness = std::numeric_limits<double>::infinity();
 
     child1.energyLoss = 0.0;
     child2.energyLoss = 0.0;
-    child1.forceLoss = 0.0;
-    child2.forceLoss = 0.0;
-
 
     return { child1, child2 };
 }
 
 // ================================
-Individual GeneticProgram::Mutate(const Individual& parent)
+Individual GeneticProgram::Mutate(const Individual& parent, int caseInd)
 {
     // Clone the parent
     Individual child = parent;
-    child.tree = parent.tree.Clone();
+    child.trees[caseInd] = parent.trees[caseInd].Clone();
 
     // Collect all nodes
-    auto nodes = child.tree.CollectNodes();
+    auto nodes = child.trees[caseInd].CollectNodes();
 
     if (nodes.empty())
         return child;
@@ -323,7 +325,7 @@ Individual GeneticProgram::Mutate(const Individual& parent)
     if (point.parent == nullptr)
     {
         // Mutating the root
-        child.tree.root = newSubtree;
+        child.trees[caseInd].root = newSubtree;
     }
     else
     {
@@ -334,7 +336,6 @@ Individual GeneticProgram::Mutate(const Individual& parent)
     child.evaluated = false;
     child.fitness = std::numeric_limits<double>::infinity();
     child.energyLoss = 0.0;
-    child.forceLoss = 0.0;
 
     return child;
 }
@@ -347,15 +348,25 @@ double GeneticProgram::RandomDouble(double min, double max)
 }
 
 // ================================
-const Individual& GeneticProgram::BestIndividual() const
+void GeneticProgram::ReplaceInd(const Individual& newInd, const Individual& oldInd)
 {
-    return *std::min_element(
-        population.begin(),
-        population.end(),
-        [](const Individual& a, const Individual& b)
-        {
-            return a.fitness < b.fitness;
-        });
+    auto it = std::find(population.begin(), population.end(), oldInd);
+    if (it != population.end())
+    {
+        *it = newInd;
+    }
+}
+
+// ================================
+void GeneticProgram::SortPopulation()
+{
+    // Sort the population based on fitness
+    // the best ind (lower fittnes) is first
+    std::sort(population.begin(), population.end(),
+              [](const Individual& a, const Individual& b)
+              {
+                  return a.fitness < b.fitness;
+              });
 }
 
 // ================================
@@ -367,98 +378,84 @@ void GeneticProgram::Run()
     // Evaluate intial population
     EvaluatePopulation();
 
+    // sort population
+    SortPopulation();
+
+    // find worst individuals
+    std::array<Individual, 2> worstInds = { 
+        population[populationSize - 1], 
+        population[populationSize - 2] };
+
     // --------------------------
     // Evolution loop
     for (int generation = 0; generation < generations; generation++)
     {
-        std::vector<Individual> newPopulation;
-        newPopulation.reserve(populationSize);
-
-        // find best individual (we keep him in next generation) (elitism)
-        const Individual& bestInd = BestIndividual();
-
-        // make a copy of best ind and store to new population
-        Individual bestIndCopy = bestInd;
-        bestIndCopy.tree = bestInd.tree.Clone();
-        newPopulation.push_back(bestIndCopy);
-
-        // print best individual
-        std::cout << "Best individual : ";
-        bestIndCopy.tree.printTree();
-        std::cout << "\n";
-
-
-        while (newPopulation.size() < populationSize)
+        // Select first parent 
+        const Individual& parent1 = TournamentSelection();
+        
+        //          Mutation
+        if (RandomDouble(0.0, 1.0) < mutationProbability)
         {
-            // Select parents
-            const Individual& parent1 = TournamentSelection();
+            Individual child1;
+
+            for (int caseInd = 0; caseInd < 4; caseInd++)
+            {
+                child1 = Mutate(child1, caseInd);
+            }
+
+            EvaluateIndividual(child1);
+            ReplaceInd(child1, worstInds[0]);
+        }
+        else    //  Crossover
+        {
+            // select second parent
+            // (for crossover we need 2 individuals)
             const Individual& parent2 = TournamentSelection();
-
             std::pair<Individual, Individual> children;
-
-            // Crossover
-            if (RandomDouble(0.0, 1.0) < crossoverProbability)
+            
+            for (int caseInd = 0; caseInd < 4; caseInd++)
             {
-                children = Crossover(parent1, parent2);
-            }
-            else
-            {
-                children = { parent1, parent2 };
+                children = Crossover(parent1, parent2, caseInd);                
             }
 
-            // Mutation
-            if (RandomDouble(0.0, 1.0) < mutationProbability)
-            {
-                children.first = Mutate(children.first);
-            }
-
-            if (RandomDouble(0.0, 1.0) < mutationProbability)
-            {
-                children.second = Mutate(children.second);
-            }
-
-            // Evaluate and add first child
             EvaluateIndividual(children.first);
-            newPopulation.push_back(children.first);
-
-            // Evaluate and Add second child if there is room
-            if (newPopulation.size() < populationSize)
-            {
-                EvaluateIndividual(children.second);
-                newPopulation.push_back(children.second);
-            }
+            EvaluateIndividual(children.second);
+            ReplaceInd(children.first, worstInds[0]);
+            ReplaceInd(children.second, worstInds[1]);
         }
 
-        // Replace the old population
-        population = std::move(newPopulation);
+        // sort population
+        SortPopulation();
+
+        // find worst individuals
+        std::array<Individual, 2> worstInds = { 
+            population[populationSize - 1], 
+            population[populationSize - 2] };
 
         //-------------------------
         // Print hof
-        double bestFitness = population.front().fitness;
-        int sumSize = 0;
-        int maxSize = 0;
-        int minSize = 10000;
+        double bestFitness = population[0].fitness; // lowest fitness
+        std::array<int, 4> maxSize = {0, 0, 0, 0};
+        std::array<int, 4> minSize = {10000, 10000, 10000, 10000};
 
         for (const auto& individual : population)
         {
-            bestFitness = std::min(bestFitness, individual.fitness);
-
-            int indSize = individual.tree.Size();
-            sumSize += indSize;
-            maxSize = std::max(maxSize, indSize);
-            minSize = std::min(minSize, indSize);
+            for (int caseInd = 0; caseInd < 4; caseInd++)
+            {
+                int indSize = individual.trees[caseInd].Size();
+                maxSize[caseInd] = std::max(maxSize[caseInd], indSize);
+                minSize[caseInd] = std::min(minSize[caseInd], indSize);
+            }
         }
 
         std::cout << "GENERATION " 
             << generation
             << "\nBest fitness \t= "
             << bestFitness
-            << "\nAverage Size \t= "
-            << static_cast<double>(sumSize) / populationSize
             << "\nMax Size \t= "
-            << maxSize
+            << maxSize[0] << ", " << maxSize[1] << ", " << maxSize[2] << ", " << maxSize[3]
             << "\nMin Size \t= "
-            << minSize
+            << minSize[0] << ", " << minSize[1] << ", " << minSize[2] << ", " << minSize[3]
             << "\n=====================\n";
     }
 }

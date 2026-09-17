@@ -50,7 +50,6 @@ int main()
 	int gens				= 10;
 	int initialIndMaxDepth	= 3;
 	int tournamentSize		= 3;
-	double crossoverProb	= 0.9;
 	double mutationProb		= 0.1;
 	std::pair constRange	= { -10.0, 10.0 };
 
@@ -60,8 +59,7 @@ int main()
 		popSize,
 		gens,
 		initialIndMaxDepth,
-		tournamentSize, 
-		crossoverProb,
+		tournamentSize,
 		mutationProb,
 		constRange,
 		precompLJData,
