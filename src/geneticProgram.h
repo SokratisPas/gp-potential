@@ -11,6 +11,7 @@
 #include "individual.h"
 #include "primitives.h"
 #include "POSCARdata.h"
+#include "xyz-parser.h"
 
 // --------------------------------------------------------
 class GeneticProgram {
@@ -26,23 +27,23 @@ public:
         int tournamentSize,
         double mutationProbability,
         std::pair<double, double> constRange,
-        const std::vector<std::vector<PairDistanceData>>& data,
+        const std::vector<Snapshot>& data,
         std::function<double(
             const std::array<Tree,4>&, 
-            const std::vector<std::vector<PairDistanceData>>&)> 
+            const std::vector<Snapshot>&)> 
             fitnessFunction)
-            :
-            populationSize(populationSize),
-            generations(generations),
-            initialIndMaxDepth(initialIndMaxDepth),
-            tournamentSize(tournamentSize),
-            mutationProbability(mutationProbability),
-            constRange(constRange),
-            data(data),
-            fitnessFunction(fitnessFunction),
-            rng(std::random_device{}())   // initialize rng in constructor
-            {
-            }
+        :
+        populationSize(populationSize),
+        generations(generations),
+        initialIndMaxDepth(initialIndMaxDepth),
+        tournamentSize(tournamentSize),
+        mutationProbability(mutationProbability),
+        constRange(constRange),
+        data(data),
+        fitnessFunction(fitnessFunction),
+        rng(std::random_device{}())   // initialize rng in constructor
+        {
+        }
             
             
 private:
@@ -52,7 +53,7 @@ private:
     int tournamentSize;
     double mutationProbability;
     std::pair<double, double> constRange;
-    const std::vector<std::vector<PairDistanceData>>& data;    
+    const std::vector<Snapshot>& data;    
     std::mt19937 rng;   // each GeneticProgram has unique rng
 
     // primitive functions (update when adding new primitives in primitives.h)
@@ -70,7 +71,7 @@ private:
     // fitness function
     std::function<double(
         const std::array<Tree,4>&, 
-        const std::vector<std::vector<PairDistanceData>>&)>
+        const std::vector<Snapshot>&)>
         fitnessFunction;
         
     void InitializePopulation();

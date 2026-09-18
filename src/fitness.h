@@ -3,6 +3,7 @@
 #include <vector>
 #include "treeClass.h"
 #include "POSCARdata.h"
+#include "xyz-parser.h"
 
 constexpr double compPar = 0.3;
 
@@ -50,4 +51,12 @@ double fitnessFunction(const std::array<Tree,4>& trees,
 		+ lossSize;
 
 	return totalLoss;
+}
+
+// -----------------------------------------------
+double fitnessFun_2elements(const std::array<Tree,4>& trees, 
+	const std::vector<Snapshot>& data)
+{
+	// add fitness function
+	return 0.0;
 }

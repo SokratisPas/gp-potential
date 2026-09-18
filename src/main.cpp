@@ -11,10 +11,11 @@
 #include "geneticProgram.h"
 #include "POSCARdata.h"
 #include "fitness.h"
+#include "xyz-parser.h"
 
 
 /* TO DO
-- add 2 element parser
+- write fitness function for 2 elements 
 - add Ptournament (and Temperature)
 - make input/output files 
 - python runner
@@ -29,34 +30,25 @@
 int main()
 {
 	// ----------------------------------------------
-	// DATA
-	int snapshotSize = 15;	// number of .vasp files (each snapshot is one file)
-
-	std::vector<PoscarData> fccData				= storeData("src/data/LJ_Ar/FCC/", snapshotSize);
-	std::vector<PoscarData> NVT20kKData			= storeData("src/data/LJ_Ar/NVT20kK/", snapshotSize);
-	std::vector<PoscarData> liquidData			= storeData("src/data/LJ_Ar/liquid/", snapshotSize);
-	std::vector<PoscarData> liquidNVT100KData	= storeData("src/data/LJ_Ar/liquidNVT100K/", snapshotSize);
-
-	// liquid NPT 100K
-	// there is a problem with the number of vasp files
-
-	const std::vector<std::vector<PoscarData>> LJData 
-		= { fccData, NVT20kKData, liquidData, liquidNVT100KData };
-
-	const std::vector<std::vector<PairDistanceData>> precompLJData 
-		= PrecomputeDistances(LJData);
-
-	// ----------------------------------------------
 	// GP parameters
+	constexpr double cutoff = 5.0;
 	int popSize				= 10;
 	int gens				= 10;
 	int initialIndMaxDepth	= 3;
 	int tournamentSize		= 3;
 	double mutationProb		= 0.1;
 	std::pair constRange	= { -10.0, 10.0 };
+	
 
+	// ----------------------------------------------	
+	// DATA
+	XYZParser W_Mo_parser(cutoff);
+	
+	std::vector<Snapshot> W_Mo_data = 
+		W_Mo_parser.parse("src/data/W-Mo/trainset.xyz");
 	
 	// ----------------------------------------------
+	// Genetic Program
 	GeneticProgram geneticProgram(
 		popSize,
 		gens,
@@ -64,11 +56,14 @@ int main()
 		tournamentSize,
 		mutationProb,
 		constRange,
-		precompLJData,
-		fitnessFunction);
+		W_Mo_data,
+		fitnessFun_2elements
+	);
 
 	geneticProgram.Run();
 
+	// ----------------------------------------------
+	// Print all individuals at the end
 	std::cout << "=======================================\n"
 		<< "Print all individuals at the end:\n"
 		<< "=======================================\n";
@@ -87,6 +82,9 @@ int main()
 		}
 		std::cout << "---------------------------------------\n";
 	}
+	
+
+
 
 	return 0;
 }

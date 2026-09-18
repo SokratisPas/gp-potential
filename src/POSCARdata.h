@@ -6,12 +6,11 @@
 #include <string>
 #include <vector>
 
+#include "xyz-parser.h"
 
-struct Vec3 {
-    double x = 0.0;
-    double y = 0.0;
-    double z = 0.0;
-};
+// header file for reading POSCAR files for 1 element potential
+// for 2 element check xyz-parser.h
+
 
 // cutoff distance
 constexpr double cutoff = 5.0;
