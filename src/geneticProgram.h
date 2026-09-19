@@ -28,9 +28,12 @@ public:
         double mutationProbability,
         std::pair<double, double> constRange,
         const std::vector<Snapshot>& data,
+        int NdataSample,
         std::function<double(
             const std::array<Tree,4>&, 
-            const std::vector<Snapshot>&)> 
+            const std::vector<Snapshot>&,
+            int dataSample,
+            std::mt19937& rng)>
             fitnessFunction)
         :
         populationSize(populationSize),
@@ -40,6 +43,7 @@ public:
         mutationProbability(mutationProbability),
         constRange(constRange),
         data(data),
+        NdataSample(NdataSample),
         fitnessFunction(fitnessFunction),
         rng(std::random_device{}())   // initialize rng in constructor
         {
@@ -52,6 +56,7 @@ private:
     int initialIndMaxDepth;    // depth of initial individuals
     int tournamentSize;
     double mutationProbability;
+    int NdataSample;
     std::pair<double, double> constRange;
     const std::vector<Snapshot>& data;    
     std::mt19937 rng;   // each GeneticProgram has unique rng
@@ -71,7 +76,9 @@ private:
     // fitness function
     std::function<double(
         const std::array<Tree,4>&, 
-        const std::vector<Snapshot>&)>
+        const std::vector<Snapshot>&,
+        int dataSample,
+        std::mt19937& rng)>
         fitnessFunction;
         
     void InitializePopulation();
@@ -203,7 +210,7 @@ void GeneticProgram::EvaluateIndividual(Individual& individual)
     if (individual.evaluated)   // already evaluated fitness
         return;
 
-    individual.fitness = fitnessFunction(individual.trees, data);
+    individual.fitness = fitnessFunction(individual.trees, data, NdataSample, rng);
     individual.evaluated = true;
 }
 

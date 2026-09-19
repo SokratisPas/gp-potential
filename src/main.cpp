@@ -15,7 +15,6 @@
 
 
 /* TO DO
-- write fitness function for 2 elements 
 - add Ptournament (and Temperature)
 - make input/output files 
 - python runner
@@ -24,6 +23,7 @@
 - add crossover max depth
 - add max depth in general
 - make multiprocessing optimizations
+- add README.md to many dirs
 */ 
 
 
@@ -38,6 +38,7 @@ int main()
 	int tournamentSize		= 3;
 	double mutationProb		= 0.1;
 	std::pair constRange	= { -10.0, 10.0 };
+	int NdataSample			= 20;					// number of random snapshots for training
 	
 
 	// ----------------------------------------------	
@@ -57,6 +58,7 @@ int main()
 		mutationProb,
 		constRange,
 		W_Mo_data,
+		NdataSample,
 		fitnessFun_2elements
 	);
 
