@@ -52,16 +52,16 @@ public:
 	
 	double evaluate(double r) const;
 	
-	void printTree();	// print tree from root
+	std::string printTree() const;	// return the tree as a string representation
 
-	void printTreePart(const std::shared_ptr<Node>& node);
+	void printTreePart(const std::shared_ptr<Node>& node, std::string& out) const;
 	
 	std::shared_ptr<Node> CloneNode(const std::shared_ptr<Node>& node) const;
 
 private:
 	double evaluateNode(const std::shared_ptr<Node>& node, double r) const;
 	
-	std::string nodeTypeToString(NodeType type);
+	std::string nodeTypeToString(NodeType type) const;
 
 	int Size(const std::shared_ptr<Node>& node) const;
 	
@@ -155,7 +155,7 @@ double Tree::evaluate(double r) const
 }
 
 // ==============================
-void Tree::printTreePart(const std::shared_ptr<Node>& node)
+void Tree::printTreePart(const std::shared_ptr<Node>& node, std::string& out) const
 {
 	// there is no node
 	if (!node)
@@ -165,11 +165,11 @@ void Tree::printTreePart(const std::shared_ptr<Node>& node)
 	switch (node->primitive->type)
 	{
 	case NodeType::Const:
-		std::cout << node->constant;
+		out += std::to_string(node->constant);
 		return;
 
 	case NodeType::Var:
-		std::cout << "r";
+		out += "r";
 		return;
 
 	default:
@@ -177,24 +177,26 @@ void Tree::printTreePart(const std::shared_ptr<Node>& node)
 	}
 
 	// function
-	std::cout << nodeTypeToString(node->primitive->type);
-	std::cout << "(";
+	out += nodeTypeToString(node->primitive->type);
+	out += "(";
 
 	for (size_t i = 0; i < node->children.size(); ++i)
 	{
-		printTreePart(node->children[i]);
+		printTreePart(node->children[i], out);
 
 		if (i != node->children.size() - 1)
-			std::cout << ", ";
+			out += ", ";
 	}
 
-	std::cout << ")";
+	out += ")";
 }
 
 // ==============================
-void Tree::printTree()
+std::string Tree::printTree() const
 {
-	printTreePart(root);
+	std::string out;
+	printTreePart(root, out);
+	return out;
 }
 
 // ==============================
@@ -227,7 +229,7 @@ double Tree::evaluateNode(const std::shared_ptr<Node>& node, double r) const
 }
 
 // ==============================
-std::string Tree::nodeTypeToString(NodeType type)
+std::string Tree::nodeTypeToString(NodeType type) const
 {
 	switch (type)
 	{

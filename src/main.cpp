@@ -16,6 +16,7 @@
 
 /* TO DO
 - add Ptournament (and Temperature)
+- check how many samples to take (maybe take one sample per evolution loop)
 - make input/output files 
 - python runner
 - add more primitives 
@@ -23,7 +24,6 @@
 - add crossover max depth
 - add max depth in general
 - make multiprocessing optimizations
-- add README.md to many dirs
 */ 
 
 
@@ -32,13 +32,13 @@ int main()
 	// ----------------------------------------------
 	// GP parameters
 	constexpr double cutoff = 5.0;
-	int popSize				= 10;
+	int popSize				= 100;
 	int gens				= 10;
-	int initialIndMaxDepth	= 3;
+	int initialIndMaxDepth	= 5;
 	int tournamentSize		= 3;
-	double mutationProb		= 0.1;
+	double mutationProb		= 0.2;
 	std::pair constRange	= { -10.0, 10.0 };
-	int NdataSample			= 20;					// number of random snapshots for training
+	int NdataSample			= 50;					// number of random snapshots for fitness function
 	
 
 	// ----------------------------------------------	
@@ -46,7 +46,14 @@ int main()
 	XYZParser W_Mo_parser(cutoff);
 	
 	std::vector<Snapshot> W_Mo_data = 
-		W_Mo_parser.parse("src/data/W-Mo/trainset.xyz");
+		W_Mo_parser.parse("src/data/W-Mo/trainset.xyz");	// size = 8938 snapshots
+
+
+	// use the last data
+	int lastNdata = 100;
+	std::vector<Snapshot> reduced_data(W_Mo_data.end() - lastNdata, W_Mo_data.end());
+
+	
 	
 	// ----------------------------------------------
 	// Genetic Program
@@ -57,36 +64,13 @@ int main()
 		tournamentSize,
 		mutationProb,
 		constRange,
-		W_Mo_data,
+		reduced_data,
 		NdataSample,
 		fitnessFun_2elements
 	);
 
 	geneticProgram.Run();
 
-	// ----------------------------------------------
-	// Print all individuals at the end
-	std::cout << "=======================================\n"
-		<< "Print all individuals at the end:\n"
-		<< "=======================================\n";
-	for (auto& genPop : geneticProgram.population)
-	{
-		for (int caseInd = 0; caseInd < 4; caseInd++)
-		{
-			std::cout << "Tree: " 
-				<< caseInd << "\n";
-
-			genPop.trees[caseInd].printTree();
-
-			std::cout << "\nFitness : "
-				<< genPop.fitness
-				<< "\n";
-		}
-		std::cout << "---------------------------------------\n";
-	}
 	
-
-
-
 	return 0;
 }

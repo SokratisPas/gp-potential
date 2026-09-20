@@ -6,6 +6,8 @@
 #include <array>
 #include <vector>
 #include <algorithm>
+#include <filesystem>
+#include <fstream>
 
 #include "treeClass.h"
 #include "individual.h"
@@ -97,7 +99,7 @@ private:
 
     std::shared_ptr<Node> GenerateRandomNode(int depth);
 
-    void ReplaceInd(const Individual& newInd, const Individual& oldInd);  
+    void ReplaceInd(const Individual& newInd, size_t index);
 
     void SortPopulation();
 };
@@ -137,10 +139,9 @@ std::shared_ptr<Node> GeneticProgram::GenerateRandomNode(int depth)
     std::uniform_int_distribution<int> choice(0, 1);    // 0 -> terminal,  1 -> function
 
 
+    // chose terminal
     if (choice(rng) == 0)
     {
-        // terminal
-
         std::uniform_int_distribution<int> terminalDist(0, 1);
 
         if (terminalDist(rng) == 0)
@@ -368,13 +369,12 @@ double GeneticProgram::RandomDouble(double min, double max)
 }
 
 // ================================
-void GeneticProgram::ReplaceInd(const Individual& newInd, const Individual& oldInd)
+void GeneticProgram::ReplaceInd(const Individual& newInd, size_t index)
 {
-    auto it = std::find(population.begin(), population.end(), oldInd);
-    if (it != population.end())
-    {
-        *it = newInd;
-    }
+    if (index >= population.size())
+        return;
+
+    population[index] = newInd;
 }
 
 // ================================
@@ -392,6 +392,23 @@ void GeneticProgram::SortPopulation()
 // ================================
 void GeneticProgram::Run()
 {
+    // create output dir
+    const std::filesystem::path outputDir = std::filesystem::current_path() / "output";
+    std::filesystem::create_directories(outputDir);
+
+    // create stats file
+    const std::filesystem::path statsFilePath = outputDir / "gp_statistics.txt";
+    std::ofstream statsFile(statsFilePath);
+    if (!statsFile)
+    {
+        throw std::runtime_error("Failed to open output file: " + statsFilePath.string());
+    }
+    statsFile << "GENERATION"
+    << ",Best fitness"
+    << ",Max Size[0],Max Size[1],Max Size[2],Max Size[3]"
+    << ",Min Size[0],Min Size[1],Min Size[2],Min Size[3]"
+    << "\n";
+
     // Create the initial population
     InitializePopulation();
 
@@ -401,10 +418,11 @@ void GeneticProgram::Run()
     // sort population
     SortPopulation();
 
-    // find worst individuals
-    std::array<Individual, 2> worstInds = { 
-        population[populationSize - 1], 
-        population[populationSize - 2] };
+    // find the current worst indices in the sorted population
+    std::array<size_t, 2> worstIndices = {
+        static_cast<size_t>(populationSize - 1),
+        static_cast<size_t>(populationSize - 2)
+    };
 
     // --------------------------
     // Evolution loop
@@ -424,36 +442,37 @@ void GeneticProgram::Run()
             }
 
             EvaluateIndividual(child1);
-            ReplaceInd(child1, worstInds[0]);
+            ReplaceInd(child1, worstIndices[0]);
         }
         else    //  Crossover
         {
             // select second parent
             // (for crossover we need 2 individuals)
             const Individual& parent2 = TournamentSelection();
-            std::pair<Individual, Individual> children;
+            std::pair<Individual, Individual> children{ parent1, parent2 };
             
             for (int caseInd = 0; caseInd < 4; caseInd++)
             {
-                children = Crossover(parent1, parent2, caseInd);                
+                children = Crossover(children.first, children.second, caseInd);
             }
 
             EvaluateIndividual(children.first);
             EvaluateIndividual(children.second);
-            ReplaceInd(children.first, worstInds[0]);
-            ReplaceInd(children.second, worstInds[1]);
+            ReplaceInd(children.first, worstIndices[0]);
+            ReplaceInd(children.second, worstIndices[1]);
         }
 
         // sort population
         SortPopulation();
 
-        // find worst individuals
-        std::array<Individual, 2> worstInds = { 
-            population[populationSize - 1], 
-            population[populationSize - 2] };
+        // update the worst individuals
+        worstIndices = {
+            static_cast<size_t>(populationSize - 1),
+            static_cast<size_t>(populationSize - 2)
+        };
 
-        //-------------------------
-        // Print hof
+        // --------------------------
+        // Write statistics to file
         double bestFitness = population[0].fitness; // lowest fitness
         std::array<int, 4> maxSize = {0, 0, 0, 0};
         std::array<int, 4> minSize = {10000, 10000, 10000, 10000};
@@ -468,14 +487,51 @@ void GeneticProgram::Run()
             }
         }
 
-        std::cout << "GENERATION " 
-            << generation
-            << "\nBest fitness \t= "
-            << bestFitness
-            << "\nMax Size \t= "
-            << maxSize[0] << ", " << maxSize[1] << ", " << maxSize[2] << ", " << maxSize[3]
-            << "\nMin Size \t= "
-            << minSize[0] << ", " << minSize[1] << ", " << minSize[2] << ", " << minSize[3]
-            << "\n=====================\n";
+        statsFile << generation << ","
+            << bestFitness << ","
+            << maxSize[0] << "," << maxSize[1] << "," << maxSize[2] << "," << maxSize[3]
+            << ","
+            << minSize[0] << "," << minSize[1] << "," << minSize[2] << "," << minSize[3]
+            << "\n";
     }
+
+    statsFile.close();
+
+
+    // create hof file
+    const std::filesystem::path hofFilePath = outputDir / "gp_hof.txt";
+    std::ofstream hofFile(hofFilePath);
+    if (!hofFile)
+    {
+        throw std::runtime_error("Failed to open output file: " + hofFilePath.string());
+    }
+
+    hofFile << "=======================================\n"
+        << "HOF 10 best individuals:\n"
+        << "=======================================\n";
+
+	for (int i = 0; i < 10; i++)
+	{
+		Individual indiv = population[i];
+
+		hofFile << "==== Individual: "
+			<< i + 1
+			<< " ===="
+			<<"\nFitness : "
+			<< indiv.fitness
+			<< "\n";
+
+		for (int caseInd = 0; caseInd < 4; caseInd++)
+		{
+			hofFile << "Tree: " 
+				<< caseInd 
+				<< " (Size: "
+				<< indiv.trees[caseInd].Size()
+				<< ")\n"
+                << indiv.trees[caseInd].printTree()
+                << "\n";
+		}
+		hofFile << "\n---------------------------------------\n";
+	}
+    hofFile.close();
 }
