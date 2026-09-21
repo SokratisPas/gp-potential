@@ -5,6 +5,8 @@
 #include <functional>
 #include <stdexcept>
 
+#include "mpi.h"
+
 #include "primitives.h"
 #include "treeClass.h"
 #include "individual.h"
@@ -17,7 +19,7 @@
 /* TO DO
 - add Ptournament (and Temperature)
 - check how many samples to take (maybe take one sample per evolution loop)
-- make input/output files 
+- make input files (not sure if its necessery)
 - python runner
 - add more primitives 
 - make fitnes function better (MSE, complexity penalty)
@@ -27,7 +29,7 @@
 */ 
 
 
-int main()
+int main(int argc, char *argv[])
 {
 	// ----------------------------------------------
 	// GP parameters
@@ -53,7 +55,18 @@ int main()
 	int lastNdata = 100;
 	std::vector<Snapshot> reduced_data(W_Mo_data.end() - lastNdata, W_Mo_data.end());
 
-	
+	// ----------------------------------------------	
+	// MPI 
+	int numtasks, rank;
+
+	MPI_Init(&argc,&argv);
+	MPI_Comm_size(MPI_COMM_WORLD, &numtasks);
+	MPI_Comm_rank(MPI_COMM_WORLD, &rank);
+	if (numtasks < 2)
+	{
+		throw std::runtime_error("Give process number >= 2!\n");
+	}
+		
 	
 	// ----------------------------------------------
 	// Genetic Program
@@ -66,11 +79,13 @@ int main()
 		constRange,
 		reduced_data,
 		NdataSample,
-		fitnessFun_2elements
+		fitnessFun_2elements,
+		rank
 	);
 
 	geneticProgram.Run();
 
-	
+	MPI_Finalize();
+
 	return 0;
 }

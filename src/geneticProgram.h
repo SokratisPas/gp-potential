@@ -36,7 +36,9 @@ public:
             const std::vector<Snapshot>&,
             int dataSample,
             std::mt19937& rng)>
-            fitnessFunction)
+            fitnessFunction,
+        int rank
+    )
         :
         populationSize(populationSize),
         generations(generations),
@@ -47,6 +49,7 @@ public:
         data(data),
         NdataSample(NdataSample),
         fitnessFunction(fitnessFunction),
+        rank(rank),
         rng(std::random_device{}())   // initialize rng in constructor
         {
         }
@@ -61,6 +64,7 @@ private:
     int NdataSample;
     std::pair<double, double> constRange;
     const std::vector<Snapshot>& data;    
+    int rank;   // ID of each process
     std::mt19937 rng;   // each GeneticProgram has unique rng
 
     // primitive functions (update when adding new primitives in primitives.h)
@@ -392,12 +396,13 @@ void GeneticProgram::SortPopulation()
 // ================================
 void GeneticProgram::Run()
 {
-    // create output dir
-    const std::filesystem::path outputDir = std::filesystem::current_path() / "output";
+    // create output dir (output/process ID/)
+    const std::filesystem::path outputDir = std::filesystem::current_path() / "output" / std::to_string(rank);
     std::filesystem::create_directories(outputDir);
 
-    // create stats file
-    const std::filesystem::path statsFilePath = outputDir / "gp_statistics.txt";
+    // create stats file (gp_statistics_processID.txt)
+    const std::filesystem::path statsFilePath = 
+        outputDir / ("gp_statistics_" + std::to_string(rank) + ".txt");
     std::ofstream statsFile(statsFilePath);
     if (!statsFile)
     {
@@ -498,8 +503,10 @@ void GeneticProgram::Run()
     statsFile.close();
 
 
+    // --------------------------
     // create hof file
-    const std::filesystem::path hofFilePath = outputDir / "gp_hof.txt";
+    const std::filesystem::path hofFilePath = 
+        outputDir / ("gp_hof_" + std::to_string(rank) + ".txt");
     std::ofstream hofFile(hofFilePath);
     if (!hofFile)
     {
@@ -534,4 +541,22 @@ void GeneticProgram::Run()
 		hofFile << "\n---------------------------------------\n";
 	}
     hofFile.close();
+
+
+    // --------------------------
+    // create global hof if master process
+    if (rank == 0)
+    {
+        const std::filesystem::path outputDirMaster = std::filesystem::current_path() / "output";
+        std::filesystem::create_directories(outputDirMaster);
+
+        const std::filesystem::path hofFilePathMaster = outputDirMaster / "global_hof.txt";
+        std::ofstream hofFileGlobal(hofFilePathMaster);
+        if (!hofFileGlobal)
+        {
+            throw std::runtime_error("Failed to open output file: " + hofFilePathMaster.string());
+        }
+
+        hofFileGlobal.close();
+    }
 }

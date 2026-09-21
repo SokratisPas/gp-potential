@@ -41,5 +41,5 @@ From the project root:
 ```bash
 cmake -S . -B build
 cmake --build build
-./build/gp-potential
+mpirun -np NUMBR_PROCESSES ./build/gp-potential
 ```
