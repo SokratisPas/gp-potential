@@ -52,9 +52,9 @@ public:
 	
 	double evaluate(double r) const;
 	
-	std::string printTree() const;	// return the tree as a string representation
+	std::string convertToStr() const;	// return the tree as a string representation
 
-	void printTreePart(const std::shared_ptr<Node>& node, std::string& out) const;
+	void convertToStrPart(const std::shared_ptr<Node>& node, std::string& out) const;
 	
 	std::shared_ptr<Node> CloneNode(const std::shared_ptr<Node>& node) const;
 
@@ -155,7 +155,7 @@ double Tree::evaluate(double r) const
 }
 
 // ==============================
-void Tree::printTreePart(const std::shared_ptr<Node>& node, std::string& out) const
+void Tree::convertToStrPart(const std::shared_ptr<Node>& node, std::string& out) const
 {
 	// there is no node
 	if (!node)
@@ -182,7 +182,7 @@ void Tree::printTreePart(const std::shared_ptr<Node>& node, std::string& out) co
 
 	for (size_t i = 0; i < node->children.size(); ++i)
 	{
-		printTreePart(node->children[i], out);
+		convertToStrPart(node->children[i], out);
 
 		if (i != node->children.size() - 1)
 			out += ", ";
@@ -192,10 +192,10 @@ void Tree::printTreePart(const std::shared_ptr<Node>& node, std::string& out) co
 }
 
 // ==============================
-std::string Tree::printTree() const
+std::string Tree::convertToStr() const
 {
 	std::string out;
-	printTreePart(root, out);
+	convertToStrPart(root, out);
 	return out;
 }
 

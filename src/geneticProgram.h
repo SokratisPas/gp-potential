@@ -8,12 +8,41 @@
 #include <algorithm>
 #include <filesystem>
 #include <fstream>
+#include <cstring>
+#include <cstddef>
+
+#include "mpi.h"
 
 #include "treeClass.h"
 #include "individual.h"
 #include "primitives.h"
 #include "POSCARdata.h"
 #include "xyz-parser.h"
+
+
+// --------------------------------------------------------
+class GlobalHOF
+{
+public:
+    struct SerializedEntry
+    {
+        double fitness = std::numeric_limits<double>::infinity();
+        int sizes[4] = {0, 0, 0, 0};
+        int depths[4] = {0, 0, 0, 0};
+        char trees[4][256] = {};
+    };
+
+    std::vector<Individual> hofIndividuals;    // root-side assembled global HOF
+    std::vector<SerializedEntry> gatheredHof;  // root-side gathered local HOFs
+
+    void GatherLocalHOF(int rank,
+                       int worldSize,
+                       int NlocalInds,
+                       const std::vector<Individual>& localHof);
+
+    void writeGlobalHOF(int rank);  // root writes the gathered HOF
+};
+
 
 // --------------------------------------------------------
 class GeneticProgram {
@@ -37,7 +66,11 @@ public:
             int dataSample,
             std::mt19937& rng)>
             fitnessFunction,
-        int rank
+        int rank,
+        int worldSize,
+        GlobalHOF* globalHof,
+        int NlocalInds,
+        int NgensToSendInds 
     )
         :
         populationSize(populationSize),
@@ -50,6 +83,10 @@ public:
         NdataSample(NdataSample),
         fitnessFunction(fitnessFunction),
         rank(rank),
+        worldSize(worldSize),
+        globalHof(globalHof),
+        NlocalInds(NlocalInds),
+        NgensToSendInds(NgensToSendInds), 
         rng(std::random_device{}())   // initialize rng in constructor
         {
         }
@@ -65,7 +102,11 @@ private:
     std::pair<double, double> constRange;
     const std::vector<Snapshot>& data;    
     int rank;   // ID of each process
-    std::mt19937 rng;   // each GeneticProgram has unique rng
+    int worldSize;          // total number of MPI ranks
+    GlobalHOF* globalHof;   // shared global HOF container
+    int NlocalInds;
+    int NgensToSendInds;
+    std::mt19937 rng;       // each GeneticProgram has unique rng
 
     // primitive functions (update when adding new primitives in primitives.h)
     // (also update the function "Tree::nodeTypeToString" to print the tree)
@@ -477,7 +518,7 @@ void GeneticProgram::Run()
         };
 
         // --------------------------
-        // Write statistics to file
+        // Write statistics to local file
         double bestFitness = population[0].fitness; // lowest fitness
         std::array<int, 4> maxSize = {0, 0, 0, 0};
         std::array<int, 4> minSize = {10000, 10000, 10000, 10000};
@@ -498,13 +539,31 @@ void GeneticProgram::Run()
             << ","
             << minSize[0] << "," << minSize[1] << "," << minSize[2] << "," << minSize[3]
             << "\n";
+
+
+        // --------------------------
+        // send best individuals to global hof every NgensToSendInds
+        if ((generation % NgensToSendInds) == 0)
+        {
+            if (globalHof != nullptr)
+            {
+                std::vector<Individual> localHof;
+                localHof.reserve(static_cast<size_t>(NlocalInds));
+                for (int i = 0; i < NlocalInds; ++i)
+                {
+                    localHof.push_back(population[i]);
+                }
+
+                globalHof->GatherLocalHOF(rank, worldSize, NlocalInds, localHof);
+            }
+        }
     }
 
     statsFile.close();
 
 
     // --------------------------
-    // create hof file
+    // create local hof file
     const std::filesystem::path hofFilePath = 
         outputDir / ("gp_hof_" + std::to_string(rank) + ".txt");
     std::ofstream hofFile(hofFilePath);
@@ -535,28 +594,124 @@ void GeneticProgram::Run()
 				<< " (Size: "
 				<< indiv.trees[caseInd].Size()
 				<< ")\n"
-                << indiv.trees[caseInd].printTree()
+                << indiv.trees[caseInd].convertToStr()
                 << "\n";
 		}
 		hofFile << "\n---------------------------------------\n";
 	}
     hofFile.close();
+}
 
 
-    // --------------------------
-    // create global hof if master process
+// ================================
+void GlobalHOF::GatherLocalHOF(
+    int rank,
+    int worldSize,
+    int NlocalInds,
+    const std::vector<Individual>& localHof)
+{
+    std::vector<SerializedEntry> localEntries(static_cast<size_t>(NlocalInds));
+
+    for (int i = 0; i < NlocalInds; ++i)
+    {
+        if (i < static_cast<int>(localHof.size()))
+        {
+            const auto& ind = localHof[static_cast<size_t>(i)];
+            localEntries[static_cast<size_t>(i)].fitness = ind.fitness;
+
+            for (int j = 0; j < 4; ++j)
+            {
+                std::string treeStr = ind.trees[j].convertToStr();
+                std::snprintf(
+                    localEntries[static_cast<size_t>(i)].trees[j],
+                    sizeof(localEntries[static_cast<size_t>(i)].trees[j]),
+                    "%s",
+                    treeStr.c_str());
+                localEntries[static_cast<size_t>(i)].sizes[j] = ind.trees[j].Size();
+                localEntries[static_cast<size_t>(i)].depths[j] = ind.trees[j].Depth();
+            }
+        }
+    }
+
+    MPI_Datatype entryType;
+    int blockLengths[] = {1, 4, 4, 4 * 256};
+    MPI_Datatype types[] = {MPI_DOUBLE, MPI_INT, MPI_INT, MPI_CHAR};
+    MPI_Aint offsets[4];
+    offsets[0] = offsetof(SerializedEntry, fitness);
+    offsets[1] = offsetof(SerializedEntry, sizes);
+    offsets[2] = offsetof(SerializedEntry, depths);
+    offsets[3] = offsetof(SerializedEntry, trees);
+
+    MPI_Type_create_struct(4, blockLengths, offsets, types, &entryType);
+    MPI_Type_commit(&entryType);
+
+    std::vector<SerializedEntry> gatheredBuffer(static_cast<size_t>(worldSize) * static_cast<size_t>(NlocalInds));
+
     if (rank == 0)
     {
-        const std::filesystem::path outputDirMaster = std::filesystem::current_path() / "output";
-        std::filesystem::create_directories(outputDirMaster);
+        MPI_Gather(localEntries.data(), NlocalInds, entryType,
+                   gatheredBuffer.data(), NlocalInds, entryType,
+                   0, MPI_COMM_WORLD);
 
-        const std::filesystem::path hofFilePathMaster = outputDirMaster / "global_hof.txt";
-        std::ofstream hofFileGlobal(hofFilePathMaster);
-        if (!hofFileGlobal)
+        gatheredHof = gatheredBuffer;
+        hofIndividuals.clear();
+        hofIndividuals.reserve(gatheredHof.size());
+
+        for (const auto& entry : gatheredHof)
         {
-            throw std::runtime_error("Failed to open output file: " + hofFilePathMaster.string());
+            Individual ind;
+            ind.fitness = entry.fitness;
+            ind.evaluated = true;
+            ind.energyLoss = 0.0;
+            for (int j = 0; j < 4; ++j)
+            {
+                ind.trees[j].root = std::make_shared<Node>();
+                ind.trees[j].root->primitive = &Const;
+                ind.trees[j].root->constant = 0.0;
+            }
+            hofIndividuals.push_back(ind);
         }
-
-        hofFileGlobal.close();
     }
+    else
+    {
+        MPI_Gather(localEntries.data(), NlocalInds, entryType,
+                   nullptr, NlocalInds, entryType,
+                   0, MPI_COMM_WORLD);
+    }
+
+    MPI_Type_free(&entryType);
+}
+
+void GlobalHOF::writeGlobalHOF(int rank)
+{
+    if (rank != 0)
+        return;
+
+    const std::filesystem::path outputDirMaster = std::filesystem::current_path() / "output";
+    std::filesystem::create_directories(outputDirMaster);
+
+    const std::filesystem::path hofFilePathMaster = outputDirMaster / "global_hof.txt";
+    std::ofstream hofFileGlobal(hofFilePathMaster, std::ios::trunc);
+    if (!hofFileGlobal)
+    {
+        throw std::runtime_error("Failed to open output file: " + hofFilePathMaster.string());
+    }
+
+    for (const auto& entry : gatheredHof)
+    {
+        hofFileGlobal << "=====================\n"
+            << "Fitness : " << entry.fitness << "\n"
+            << "Size : " << entry.sizes[0] << ", " << entry.sizes[1] << ", "
+            << entry.sizes[2] << ", " << entry.sizes[3] << "\n"
+            << "Depth : " << entry.depths[0] << ", " << entry.depths[1] << ", "
+            << entry.depths[2] << ", " << entry.depths[3] << "\n"
+            << "Potentials : \n";
+
+        for (int i = 0; i < 4; ++i)
+        {
+            hofFileGlobal << i + 1 << ") " << entry.trees[i] << "\n";
+        }
+    }
+
+    hofFileGlobal.close();
 }

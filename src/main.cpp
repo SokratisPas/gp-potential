@@ -17,6 +17,8 @@
 
 
 /* TO DO
+- refactor geneticProgram.h
+- add migration
 - add Ptournament (and Temperature)
 - check how many samples to take (maybe take one sample per evolution loop)
 - make input files (not sure if its necessery)
@@ -25,7 +27,6 @@
 - make fitnes function better (MSE, complexity penalty)
 - add crossover max depth
 - add max depth in general
-- make multiprocessing optimizations
 */ 
 
 
@@ -41,6 +42,10 @@ int main(int argc, char *argv[])
 	double mutationProb		= 0.2;
 	std::pair constRange	= { -10.0, 10.0 };
 	int NdataSample			= 50;					// number of random snapshots for fitness function
+	constexpr int NlocalInds 		= 2;   		// number of inds each process sends to global hof
+	constexpr int NgensToSendInds 	= 10;    	// number of generations to update the global hof
+												// keep in mind each process updates its own individuals 
+												// in the global hof independently
 	
 
 	// ----------------------------------------------	
@@ -56,6 +61,10 @@ int main(int argc, char *argv[])
 	std::vector<Snapshot> reduced_data(W_Mo_data.end() - lastNdata, W_Mo_data.end());
 
 	// ----------------------------------------------	
+	// Initialize global hof
+	GlobalHOF globalHof;
+
+	// ----------------------------------------------	
 	// MPI 
 	int numtasks, rank;
 
@@ -66,8 +75,9 @@ int main(int argc, char *argv[])
 	{
 		throw std::runtime_error("Give process number >= 2!\n");
 	}
+
+	globalHof.hofIndividuals.resize(static_cast<size_t>(numtasks) * NlocalInds);
 		
-	
 	// ----------------------------------------------
 	// Genetic Program
 	GeneticProgram geneticProgram(
@@ -80,10 +90,19 @@ int main(int argc, char *argv[])
 		reduced_data,
 		NdataSample,
 		fitnessFun_2elements,
-		rank
+		rank,
+		numtasks,
+		&globalHof,
+		NlocalInds,
+        NgensToSendInds 
 	);
 
 	geneticProgram.Run();
+
+	if (rank == 0)
+	{
+		globalHof.writeGlobalHOF(rank);
+	}
 
 	MPI_Finalize();
 
