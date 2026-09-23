@@ -10,6 +10,7 @@
 #include <fstream>
 #include <cstring>
 #include <cstddef>
+#include <limits>
 
 #include "mpi.h"
 
@@ -27,9 +28,9 @@ public:
     struct SerializedEntry
     {
         double fitness = std::numeric_limits<double>::infinity();
-        int sizes[4] = {0, 0, 0, 0};
-        int depths[4] = {0, 0, 0, 0};
-        char trees[4][256] = {};
+        std::array<int, 4> sizes{};
+        std::array<int, 4> depths{};
+        std::array<std::array<char, 256>, 4> trees{};
     };
 
     std::vector<Individual> hofIndividuals;    // root-side assembled global HOF
@@ -67,7 +68,7 @@ public:
             std::mt19937& rng)>
             fitnessFunction,
         int rank,
-        int worldSize,
+        int numTasks,
         GlobalHOF* globalHof,
         int NlocalInds,
         int NgensToSendInds 
@@ -83,7 +84,7 @@ public:
         NdataSample(NdataSample),
         fitnessFunction(fitnessFunction),
         rank(rank),
-        worldSize(worldSize),
+        numTasks(numTasks),
         globalHof(globalHof),
         NlocalInds(NlocalInds),
         NgensToSendInds(NgensToSendInds), 
@@ -102,7 +103,7 @@ private:
     std::pair<double, double> constRange;
     const std::vector<Snapshot>& data;    
     int rank;   // ID of each process
-    int worldSize;          // total number of MPI ranks
+    int numTasks;          // total number of MPI ranks
     GlobalHOF* globalHof;   // shared global HOF container
     int NlocalInds;
     int NgensToSendInds;
@@ -144,7 +145,7 @@ private:
 
     std::shared_ptr<Node> GenerateRandomNode(int depth);
 
-    void ReplaceInd(const Individual& newInd, size_t index);
+    void ReplaceInd(const Individual& newInd, int index);
 
     void SortPopulation();
 };
@@ -414,10 +415,10 @@ double GeneticProgram::RandomDouble(double min, double max)
 }
 
 // ================================
-void GeneticProgram::ReplaceInd(const Individual& newInd, size_t index)
+void GeneticProgram::ReplaceInd(const Individual& newInd, int index)
 {
-    if (index >= population.size())
-        return;
+    if (index < 0 || index >= static_cast<int>(population.size()))
+        throw std::out_of_range("Invalid population index");
 
     population[index] = newInd;
 }
@@ -437,7 +438,7 @@ void GeneticProgram::SortPopulation()
 // ================================
 void GeneticProgram::Run()
 {
-    // create output dir (output/process ID/)
+    // create output dir (output/processID/)
     const std::filesystem::path outputDir = std::filesystem::current_path() / "output" / std::to_string(rank);
     std::filesystem::create_directories(outputDir);
 
@@ -465,9 +466,9 @@ void GeneticProgram::Run()
     SortPopulation();
 
     // find the current worst indices in the sorted population
-    std::array<size_t, 2> worstIndices = {
-        static_cast<size_t>(populationSize - 1),
-        static_cast<size_t>(populationSize - 2)
+    std::array<int, 2> worstIndices = {
+        (populationSize - 1),
+        (populationSize - 2)
     };
 
     // --------------------------
@@ -513,8 +514,8 @@ void GeneticProgram::Run()
 
         // update the worst individuals
         worstIndices = {
-            static_cast<size_t>(populationSize - 1),
-            static_cast<size_t>(populationSize - 2)
+            (populationSize - 1),
+            (populationSize - 2)
         };
 
         // --------------------------
@@ -543,19 +544,18 @@ void GeneticProgram::Run()
 
         // --------------------------
         // send best individuals to global hof every NgensToSendInds
-        if ((generation % NgensToSendInds) == 0)
+        // also always send the final generation 
+        if (globalHof != nullptr &&
+            (generation == generations - 1 || generation % NgensToSendInds == 0))
         {
-            if (globalHof != nullptr)
+            std::vector<Individual> localHof;
+            localHof.reserve(static_cast<size_t>(NlocalInds));
+            for (int i = 0; i < NlocalInds; ++i)
             {
-                std::vector<Individual> localHof;
-                localHof.reserve(static_cast<size_t>(NlocalInds));
-                for (int i = 0; i < NlocalInds; ++i)
-                {
-                    localHof.push_back(population[i]);
-                }
-
-                globalHof->GatherLocalHOF(rank, worldSize, NlocalInds, localHof);
+                localHof.push_back(population[i]);
             }
+
+            globalHof->GatherLocalHOF(rank, numTasks, NlocalInds, localHof);
         }
     }
 
@@ -622,9 +622,11 @@ void GlobalHOF::GatherLocalHOF(
             for (int j = 0; j < 4; ++j)
             {
                 std::string treeStr = ind.trees[j].convertToStr();
+                auto& treeBuffer = localEntries[static_cast<size_t>(i)].trees[j];
+                treeBuffer.fill('\0');
                 std::snprintf(
-                    localEntries[static_cast<size_t>(i)].trees[j],
-                    sizeof(localEntries[static_cast<size_t>(i)].trees[j]),
+                    treeBuffer.data(),
+                    treeBuffer.size(),
                     "%s",
                     treeStr.c_str());
                 localEntries[static_cast<size_t>(i)].sizes[j] = ind.trees[j].Size();
@@ -642,6 +644,8 @@ void GlobalHOF::GatherLocalHOF(
     offsets[2] = offsetof(SerializedEntry, depths);
     offsets[3] = offsetof(SerializedEntry, trees);
 
+    // MPI_Type_create_struct(N_diff_blocks/types, N_elementsInBlock[],
+    //                  memoryDisplacementOfBlock[], typeOfBlock[], &output)
     MPI_Type_create_struct(4, blockLengths, offsets, types, &entryType);
     MPI_Type_commit(&entryType);
 
@@ -649,10 +653,16 @@ void GlobalHOF::GatherLocalHOF(
 
     if (rank == 0)
     {
-        MPI_Gather(localEntries.data(), NlocalInds, entryType,
-                   gatheredBuffer.data(), NlocalInds, entryType,
-                   0, MPI_COMM_WORLD);
+        // MPI_Gather(&sendbuf,sendcnt,sendtype,&recvbuf,recvcount,recvtype,root,comm)
+        MPI_Gather(
+            localEntries.data(), NlocalInds,
+            entryType, gatheredBuffer.data(),
+            NlocalInds, entryType,
+            0, MPI_COMM_WORLD
+        );
 
+        
+        // rank 0 also updates the hofIndividuals vector
         gatheredHof = gatheredBuffer;
         hofIndividuals.clear();
         hofIndividuals.reserve(gatheredHof.size());
@@ -674,16 +684,22 @@ void GlobalHOF::GatherLocalHOF(
     }
     else
     {
-        MPI_Gather(localEntries.data(), NlocalInds, entryType,
-                   nullptr, NlocalInds, entryType,
-                   0, MPI_COMM_WORLD);
+        // MPI_Gather(&sendbuf,sendcnt,sendtype,&recvbuf,recvcount,recvtype,root,comm)
+        MPI_Gather(
+            localEntries.data(), NlocalInds,
+            entryType, nullptr, 
+            NlocalInds, entryType,
+            0, MPI_COMM_WORLD
+        );
     }
 
     MPI_Type_free(&entryType);
 }
 
+// ================================
 void GlobalHOF::writeGlobalHOF(int rank)
 {
+    // only rank 0 writes the globalHof file
     if (rank != 0)
         return;
 
@@ -709,7 +725,7 @@ void GlobalHOF::writeGlobalHOF(int rank)
 
         for (int i = 0; i < 4; ++i)
         {
-            hofFileGlobal << i + 1 << ") " << entry.trees[i] << "\n";
+            hofFileGlobal << i + 1 << ") " << entry.trees[i].data() << "\n";
         }
     }
 

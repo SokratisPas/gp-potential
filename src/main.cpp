@@ -17,7 +17,7 @@
 
 
 /* TO DO
-- refactor geneticProgram.h
+- check data (which to use, which energies, the units)
 - add migration
 - add Ptournament (and Temperature)
 - check how many samples to take (maybe take one sample per evolution loop)
@@ -34,14 +34,14 @@ int main(int argc, char *argv[])
 {
 	// ----------------------------------------------
 	// GP parameters
-	constexpr double cutoff = 5.0;
-	int popSize				= 100;
-	int gens				= 10;
-	int initialIndMaxDepth	= 5;
-	int tournamentSize		= 3;
-	double mutationProb		= 0.2;
-	std::pair constRange	= { -10.0, 10.0 };
-	int NdataSample			= 50;					// number of random snapshots for fitness function
+	constexpr double cutoff = 5.0;		// cutoff radius	
+	int popSize				= 100;		// population size of each process
+	int gens				= 10;		// generations to run for each process
+	int initialIndMaxDepth	= 5;		// max depth of initial population
+	int tournamentSize		= 3;		// tournament size
+	double mutationProb		= 0.2;		// mutation probability
+	std::pair constRange	= { -10.0, 10.0 };		// constants range
+	int NdataSample			= 50;	// number of random snapshots for fitness function
 	constexpr int NlocalInds 		= 2;   		// number of inds each process sends to global hof
 	constexpr int NgensToSendInds 	= 10;    	// number of generations to update the global hof
 												// keep in mind each process updates its own individuals 
