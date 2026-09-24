@@ -241,6 +241,7 @@ std::string Tree::nodeTypeToString(NodeType type) const
 	case NodeType::Inv12: return "Inv12";
 	case NodeType::Var:   return "r";
 	case NodeType::Const: return "Const";
+	case NodeType::Pow:   return "Pow";
 	}
 
 	return "Unknown";

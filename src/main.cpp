@@ -17,8 +17,7 @@
 
 
 /* TO DO
-- check data (which to use, which energies, the units)
-- add migration
+- check data (which ones to use, which energies, the units)
 - add Ptournament (and Temperature)
 - check how many samples to take (maybe take one sample per evolution loop)
 - make input files (not sure if its necessery)
@@ -36,7 +35,7 @@ int main(int argc, char *argv[])
 	// GP parameters
 	constexpr double cutoff = 5.0;		// cutoff radius	
 	int popSize				= 100;		// population size of each process
-	int gens				= 10;		// generations to run for each process
+	int gens				= 50;		// generations to run for each process
 	int initialIndMaxDepth	= 5;		// max depth of initial population
 	int tournamentSize		= 3;		// tournament size
 	double mutationProb		= 0.2;		// mutation probability
@@ -46,6 +45,7 @@ int main(int argc, char *argv[])
 	constexpr int NgensToSendInds 	= 10;    	// number of generations to update the global hof
 												// keep in mind each process updates its own individuals 
 												// in the global hof independently
+	int NgensToMigration	= 20;		// number of generations to perform migration
 	
 
 	// ----------------------------------------------	
@@ -76,8 +76,6 @@ int main(int argc, char *argv[])
 		throw std::runtime_error("Give process number >= 2!\n");
 	}
 
-	globalHof.hofIndividuals.resize(static_cast<size_t>(numtasks) * NlocalInds);
-		
 	// ----------------------------------------------
 	// Genetic Program
 	GeneticProgram geneticProgram(
@@ -94,7 +92,8 @@ int main(int argc, char *argv[])
 		numtasks,
 		&globalHof,
 		NlocalInds,
-        NgensToSendInds 
+        NgensToSendInds,
+		NgensToMigration
 	);
 
 	geneticProgram.Run();

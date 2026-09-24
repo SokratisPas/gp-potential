@@ -10,7 +10,9 @@
 #include <fstream>
 #include <cstring>
 #include <cstddef>
+#include <cctype>
 #include <limits>
+#include <string>
 
 #include "mpi.h"
 
@@ -30,11 +32,10 @@ public:
         double fitness = std::numeric_limits<double>::infinity();
         std::array<int, 4> sizes{};
         std::array<int, 4> depths{};
-        std::array<std::array<char, 256>, 4> trees{};
+        std::array<std::array<char, 256>, 4> trees{};   // we send the trees as char array
     };
 
-    std::vector<Individual> hofIndividuals;    // root-side assembled global HOF
-    std::vector<SerializedEntry> gatheredHof;  // root-side gathered local HOFs
+    std::vector<SerializedEntry> gatheredHof;  // gathered local HOFs in global hof
 
     void GatherLocalHOF(int rank,
                        int worldSize,
@@ -71,7 +72,8 @@ public:
         int numTasks,
         GlobalHOF* globalHof,
         int NlocalInds,
-        int NgensToSendInds 
+        int NgensToSendInds,
+        int NgensToMigration
     )
         :
         populationSize(populationSize),
@@ -88,6 +90,7 @@ public:
         globalHof(globalHof),
         NlocalInds(NlocalInds),
         NgensToSendInds(NgensToSendInds), 
+        NgensToMigration(NgensToMigration),
         rng(std::random_device{}())   // initialize rng in constructor
         {
         }
@@ -107,6 +110,7 @@ private:
     GlobalHOF* globalHof;   // shared global HOF container
     int NlocalInds;
     int NgensToSendInds;
+    int NgensToMigration;
     std::mt19937 rng;       // each GeneticProgram has unique rng
 
     // primitive functions (update when adding new primitives in primitives.h)
@@ -118,7 +122,8 @@ private:
         &Mul,
         &Div,
         &Inv6,
-        &Inv12
+        &Inv12,
+        &Pow
     };
     
     // fitness function
@@ -132,26 +137,175 @@ private:
     void InitializePopulation();
     void EvaluatePopulation();
     void EvaluateIndividual(Individual& individual);
-
     const Individual& TournamentSelection();
-
     std::pair<Individual, Individual> Crossover(const Individual& parent1,
-                                                const Individual& parent2,
-                                                int caseInd);
-
+        const Individual& parent2,
+        int caseInd
+    );
     Individual Mutate(const Individual& parent, int caseInd);
-
     double RandomDouble(double min, double max);
-
     std::shared_ptr<Node> GenerateRandomNode(int depth);
-
     void ReplaceInd(const Individual& newInd, int index);
-
     void SortPopulation();
+    Individual DeserializeGlobalEntry(const GlobalHOF::SerializedEntry& entry) const;
+    std::shared_ptr<Node> ParseTreeExpression(const std::string& expression,
+        size_t& pos) const;
+    std::shared_ptr<Node> ParseNode(const std::string& expression, size_t& pos) const;
+    static std::string Trim(const std::string& text);
 };
 
+// ================================
+std::string GeneticProgram::Trim(const std::string& text)
+{
+    size_t begin = 0;
+    while (begin < text.size() && std::isspace(static_cast<unsigned char>(text[begin])))
+        ++begin;
 
-// --------------------------------------------------------
+    size_t end = text.size();
+    while (end > begin && std::isspace(static_cast<unsigned char>(text[end - 1])))
+        --end;
+
+    return text.substr(begin, end - begin);
+}
+
+// ================================
+std::shared_ptr<Node> GeneticProgram::ParseNode(const std::string& expression, size_t& pos) const
+{
+    const auto skipSpaces = [&]() {
+        while (pos < expression.size() && std::isspace(static_cast<unsigned char>(expression[pos])))
+            ++pos;
+    };
+
+    skipSpaces();
+
+    if (pos >= expression.size())
+        throw std::runtime_error("Unexpected end of tree expression");
+
+    auto node = std::make_shared<Node>();
+
+    if (expression[pos] == 'r')
+    {
+        node->primitive = &Var;
+        ++pos;
+        return node;
+    }
+
+    if (expression[pos] == '-' || std::isdigit(static_cast<unsigned char>(expression[pos])))
+    {
+        size_t start = pos;
+        if (expression[pos] == '-')
+            ++pos;
+        while (pos < expression.size() && (std::isdigit(static_cast<unsigned char>(expression[pos])) || expression[pos] == '.'))
+            ++pos;
+        if (pos < expression.size() && expression[pos] == 'e')
+        {
+            ++pos;
+            if (pos < expression.size() && (expression[pos] == '-' || expression[pos] == '+'))
+                ++pos;
+            while (pos < expression.size() && std::isdigit(static_cast<unsigned char>(expression[pos])))
+                ++pos;
+        }
+
+        const std::string constantString = expression.substr(start, pos - start);
+        node->primitive = &Const;
+        node->constant = std::stod(constantString);
+        return node;
+    }
+
+    size_t start = pos;
+    while (pos < expression.size() && std::isalnum(static_cast<unsigned char>(expression[pos])))
+        ++pos;
+
+    const std::string funcName = expression.substr(start, pos - start);
+    const Primitive* primitive = PrimitiveFromName(funcName);
+    if (primitive == nullptr)
+        throw std::runtime_error("Unknown tree primitive in serialized HOF entry: " + funcName);
+
+    node->primitive = primitive;
+    skipSpaces();
+    if (pos >= expression.size() || expression[pos] != '(')
+        throw std::runtime_error("Expected '(' after primitive name: " + funcName);
+    ++pos;
+
+    while (true)
+    {
+        skipSpaces();
+        if (pos >= expression.size())
+            throw std::runtime_error("Unexpected end of function arguments");
+
+        if (expression[pos] == ')')
+        {
+            ++pos;
+            break;
+        }
+
+        node->children.push_back(ParseNode(expression, pos));
+        skipSpaces();
+
+        if (pos < expression.size() && expression[pos] == ',')
+        {
+            ++pos;
+            continue;
+        }
+
+        if (pos < expression.size() && expression[pos] == ')')
+        {
+            ++pos;
+            break;
+        }
+
+        throw std::runtime_error("Expected ',' or ')' in serialized tree expression");
+    }
+
+    return node;
+}
+
+// ================================
+std::shared_ptr<Node> GeneticProgram::ParseTreeExpression(const std::string& expression, size_t& pos) const
+{
+    pos = 0;
+    const std::string trimmed = Trim(expression);
+    if (trimmed.empty())
+        return nullptr;
+
+    const auto root = ParseNode(trimmed, pos);
+    while (pos < trimmed.size() && std::isspace(static_cast<unsigned char>(trimmed[pos])))
+        ++pos;
+    return root;
+}
+
+// ================================
+Individual GeneticProgram::DeserializeGlobalEntry(const GlobalHOF::SerializedEntry& entry) const
+{
+    Individual individual;
+    individual.fitness = entry.fitness;
+    individual.evaluated = true;
+    individual.energyLoss = 0.0;
+
+    for (int j = 0; j < 4; ++j)
+    {
+        std::string treeText = Trim(entry.trees[j].data());
+        if (treeText.empty())
+        {
+            individual.trees[j].root = std::make_shared<Node>();
+            individual.trees[j].root->primitive = &Const;
+            individual.trees[j].root->constant = 0.0;
+            continue;
+        }
+
+        size_t pos = 0;
+        individual.trees[j].root = ParseTreeExpression(treeText, pos);
+        if (!individual.trees[j].root)
+        {
+            individual.trees[j].root = std::make_shared<Node>();
+            individual.trees[j].root->primitive = &Const;
+            individual.trees[j].root->constant = 0.0;
+        }
+    }
+
+    return individual;
+}
+
 // ================================
 std::shared_ptr<Node> GeneticProgram::GenerateRandomNode(int depth)
 {
@@ -557,6 +711,36 @@ void GeneticProgram::Run()
 
             globalHof->GatherLocalHOF(rank, numTasks, NlocalInds, localHof);
         }
+
+        // --------------------------
+        // migration (every NgensToMigration steps)
+        if (globalHof != nullptr && generation > 0 && generation % NgensToMigration == 0)
+        {
+            if (!globalHof->gatheredHof.empty())
+            {
+                // chose number of migrants in [1, 5]
+                std::uniform_int_distribution<int> migrantCountDist(1, std::min(5, populationSize));
+                const int migrantCount = migrantCountDist(rng);
+
+                // distributions for random selection in globalHof and population
+                std::uniform_int_distribution<size_t> globalEntryDist(0, globalHof->gatheredHof.size() - 1);
+                std::uniform_int_distribution<int> replaceDist(0, populationSize - 1);
+
+                // replace random individuals with migrants
+                for (int i = 0; i < migrantCount; ++i)
+                {
+                    const auto& entry = globalHof->gatheredHof[globalEntryDist(rng)];
+                    Individual migrant = DeserializeGlobalEntry(entry);
+                    const int replaceIndex = replaceDist(rng);
+
+                    population[replaceIndex] = migrant;
+                    population[replaceIndex].evaluated = true;
+                    population[replaceIndex].fitness = migrant.fitness;
+                }
+
+                SortPopulation();
+            }
+        }
     }
 
     statsFile.close();
@@ -662,25 +846,8 @@ void GlobalHOF::GatherLocalHOF(
         );
 
         
-        // rank 0 also updates the hofIndividuals vector
+        // rank 0 stores the gathered serialized entries for the global HOF
         gatheredHof = gatheredBuffer;
-        hofIndividuals.clear();
-        hofIndividuals.reserve(gatheredHof.size());
-
-        for (const auto& entry : gatheredHof)
-        {
-            Individual ind;
-            ind.fitness = entry.fitness;
-            ind.evaluated = true;
-            ind.energyLoss = 0.0;
-            for (int j = 0; j < 4; ++j)
-            {
-                ind.trees[j].root = std::make_shared<Node>();
-                ind.trees[j].root->primitive = &Const;
-                ind.trees[j].root->constant = 0.0;
-            }
-            hofIndividuals.push_back(ind);
-        }
     }
     else
     {
