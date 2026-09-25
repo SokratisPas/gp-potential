@@ -12,4 +12,4 @@ n_local_inds = 2
 ngens_to_send_inds = 10
 ngens_to_migration = 20
 data_path = src/data/W-Mo/trainset.xyz
-output_dir = run/output
+output_dir = output

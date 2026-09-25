@@ -147,8 +147,8 @@ void printUsage(const char* programName)
 
 int main(int argc, char *argv[])
 {
-    std::filesystem::path configPath = "run/input.txt";
-    std::filesystem::path outputDir = "run/output";
+    std::filesystem::path configPath = "input.txt";
+    std::filesystem::path outputDir = "output";
 
     for (int i = 1; i < argc; ++i)
     {

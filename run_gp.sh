@@ -9,8 +9,8 @@
 set -e
 
 SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
-REPO_ROOT="$(cd -- "${SCRIPT_DIR}/.." && pwd)"
-OUTPUT_ROOT="${REPO_ROOT}/run/output"
+REPO_ROOT="$SCRIPT_DIR"
+OUTPUT_ROOT="${REPO_ROOT}/output"
 
 cd "$REPO_ROOT"
 mkdir -p "$OUTPUT_ROOT"
@@ -31,5 +31,5 @@ JOB_OUT_DIR="${OUTPUT_ROOT}/${SLURM_JOB_ID:-local}"
 mkdir -p "$JOB_OUT_DIR"
 
 srun --mpi=pmi2 "${REPO_ROOT}/build/gp-potential" \
-  --config "${REPO_ROOT}/run/input.txt" \
+  --config "${REPO_ROOT}/input.txt" \
   --output-dir "$JOB_OUT_DIR"
