@@ -43,12 +43,3 @@ cmake -S . -B build
 cmake --build build
 mpirun -np NUMBR_PROCESSES ./build/gp-potential
 ```
-
-## Run on HPC cluster (slurm)
-
-Configure the /run/run_gp.sh according to your settings, 
-then run:
-
-```bash
-sbatch run_gp.sh
-```
