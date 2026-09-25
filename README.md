@@ -46,7 +46,7 @@ mpirun -np NUMBR_PROCESSES ./build/gp-potential
 
 ## Run on HPC cluster (slurm)
 
-Configure the /run/run_gp.sh acording to your settings, 
+Configure the /run/run_gp.sh according to your settings, 
 then run:
 
 ```bash
