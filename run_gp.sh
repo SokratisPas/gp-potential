@@ -1,35 +1,35 @@
 #!/bin/bash
+
 #SBATCH --job-name=gp-potential
 #SBATCH --partition=testing
 #SBATCH --ntasks=4
 #SBATCH --time=00:30:00
-#SBATCH --output=%x-%j.out
-#SBATCH --error=%x-%j.err
+#SBATCH --output=/home/s/spastel/projects/gp-potential/output/%x-%j.out
+#SBATCH --error=/home/s/spastel/projects/gp-potential/output/%x-%j.err
 
 set -e
 
-SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
-REPO_ROOT="$SCRIPT_DIR"
-OUTPUT_ROOT="${REPO_ROOT}/output"
+# Go to project directory
+cd /home/s/spastel/projects/gp-potential
 
-cd "$REPO_ROOT"
-mkdir -p "$OUTPUT_ROOT"
-
-# cluster modules
+# Cluster modules
 module purge
 module load gcc/15.2.0
 module load cmake/3.31.8
 module load intel-oneapi-mpi/2021.16.0
 
-# pmi2, intel mpi
-export I_MPI_PMI_LIBRARY="${I_MPI_PMI_LIBRARY:-/usr/lib64/libpmi2.so}"
+# Intel MPI + Slurm PMI2
+export I_MPI_PMI_LIBRARY=/usr/lib64/libpmi2.so
 
+# Build
 cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
 cmake --build build -j4
 
-JOB_OUT_DIR="${OUTPUT_ROOT}/${SLURM_JOB_ID:-local}"
-mkdir -p "$JOB_OUT_DIR"
+# Create output directory for this job
+mkdir -p output/$SLURM_JOB_ID
 
-srun --mpi=pmi2 "${REPO_ROOT}/build/gp-potential" \
-  --config "${REPO_ROOT}/input.txt" \
-  --output-dir "$JOB_OUT_DIR"
+# Run
+srun --mpi=pmi2 -n $SLURM_NTASKS \
+    ./build/gp-potential \
+    --config input.txt \
+    --output-dir output/$SLURM_JOB_ID
