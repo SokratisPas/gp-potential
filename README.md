@@ -34,7 +34,7 @@ This project explores symbolic regression with a genetic program to learn a pair
   Defines an individual in the population, containing several trees.
 
 
-## Build and run
+## Run with CMake
 
 From the project root:
 
@@ -42,4 +42,13 @@ From the project root:
 cmake -S . -B build
 cmake --build build
 mpirun -np NUMBR_PROCESSES ./build/gp-potential
+```
+
+## Run on HPC cluster (slurm)
+
+Configure the /run/run_gp.sh acording to your settings, 
+then run:
+
+```bash
+sbatch run_gp.sh
 ```

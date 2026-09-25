@@ -1,0 +1,15 @@
+pop_size = 100
+gens = 50
+initial_ind_max_depth = 5
+tournament_size = 3
+mutation_prob = 0.2
+const_min = -10.0
+const_max = 10.0
+ndata_sample = 50
+last_n_data = 100
+cutoff = 5.0
+n_local_inds = 2
+ngens_to_send_inds = 10
+ngens_to_migration = 20
+data_path = src/data/W-Mo/trainset.xyz
+output_dir = run/output

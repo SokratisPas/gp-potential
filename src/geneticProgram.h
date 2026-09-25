@@ -42,7 +42,7 @@ public:
                        int NlocalInds,
                        const std::vector<Individual>& localHof);
 
-    void writeGlobalHOF(int rank);  // root writes the gathered HOF
+    void writeGlobalHOF(int rank, const std::filesystem::path& outputDir = "output");  // root writes the gathered HOF
 };
 
 
@@ -73,7 +73,8 @@ public:
         GlobalHOF* globalHof,
         int NlocalInds,
         int NgensToSendInds,
-        int NgensToMigration
+        int NgensToMigration,
+        const std::filesystem::path& outputDir = "output"
     )
         :
         populationSize(populationSize),
@@ -91,6 +92,7 @@ public:
         NlocalInds(NlocalInds),
         NgensToSendInds(NgensToSendInds), 
         NgensToMigration(NgensToMigration),
+        outputDirectory(outputDir),
         rng(std::random_device{}())   // initialize rng in constructor
         {
         }
@@ -111,6 +113,7 @@ private:
     int NlocalInds;
     int NgensToSendInds;
     int NgensToMigration;
+    std::filesystem::path outputDirectory;
     std::mt19937 rng;       // each GeneticProgram has unique rng
 
     // primitive functions (update when adding new primitives in primitives.h)
@@ -592,8 +595,8 @@ void GeneticProgram::SortPopulation()
 // ================================
 void GeneticProgram::Run()
 {
-    // create output dir (output/processID/)
-    const std::filesystem::path outputDir = std::filesystem::current_path() / "output" / std::to_string(rank);
+    // create output dir (configured output dir / processID/)
+    const std::filesystem::path outputDir = std::filesystem::absolute(outputDirectory) / std::to_string(rank);
     std::filesystem::create_directories(outputDir);
 
     // create stats file (gp_statistics_processID.txt)
@@ -864,13 +867,13 @@ void GlobalHOF::GatherLocalHOF(
 }
 
 // ================================
-void GlobalHOF::writeGlobalHOF(int rank)
+void GlobalHOF::writeGlobalHOF(int rank, const std::filesystem::path& outputDir)
 {
     // only rank 0 writes the globalHof file
     if (rank != 0)
         return;
 
-    const std::filesystem::path outputDirMaster = std::filesystem::current_path() / "output";
+    const std::filesystem::path outputDirMaster = std::filesystem::absolute(outputDir);
     std::filesystem::create_directories(outputDirMaster);
 
     const std::filesystem::path hofFilePathMaster = outputDirMaster / "global_hof.txt";
