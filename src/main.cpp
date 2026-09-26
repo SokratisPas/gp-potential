@@ -189,6 +189,7 @@ int main(int argc, char *argv[])
     if (config.lastNdata <= 0 || config.lastNdata > static_cast<int>(W_Mo_data.size()))
         throw std::runtime_error("last_n_data is out of range for the dataset size");
 
+    // get last data 
     std::vector<Snapshot> reduced_data(W_Mo_data.end() - config.lastNdata, W_Mo_data.end());
 
     GlobalHOF globalHof;

@@ -36,7 +36,7 @@ This project explores symbolic regression with a genetic program to learn a pair
 
 ## Run with CMake
 
-From the project root:
+From the project root :
 
 ```bash
 cmake -S . -B build
