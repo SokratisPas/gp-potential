@@ -10,6 +10,7 @@
 #include <fstream>
 #include <cstring>
 #include <cstddef>
+#include <cstdint>
 #include <cctype>
 #include <limits>
 #include <string>
@@ -32,10 +33,15 @@ public:
         double fitness = std::numeric_limits<double>::infinity();
         std::array<int, 4> sizes{};
         std::array<int, 4> depths{};
-        std::array<std::array<char, 256>, 4> trees{};   // we send the trees as char array
+        std::array<std::string, 4> trees{};
     };
 
     std::vector<SerializedEntry> gatheredHof;  // gathered local HOFs in global hof
+
+    static std::string SerializeEntry(const SerializedEntry& entry);
+    static std::vector<char> SerializeLocalEntries(const std::vector<SerializedEntry>& localEntries);
+    static std::vector<SerializedEntry> DeserializeLocalEntries(const std::vector<char>& buffer,
+                                                              size_t expectedCount);
 
     void GatherLocalHOF(int rank,
                        int worldSize,
@@ -169,6 +175,106 @@ std::string GeneticProgram::Trim(const std::string& text)
         --end;
 
     return text.substr(begin, end - begin);
+}
+
+// ================================
+std::string GlobalHOF::SerializeEntry(const SerializedEntry& entry)
+{
+    std::string buffer;
+    buffer.reserve(sizeof(double) + 4 * sizeof(int) + 4 * sizeof(int) + 4 * 4 * sizeof(uint32_t));
+
+    auto appendValue = [&buffer](const auto& value)
+    {
+        const char* data = reinterpret_cast<const char*>(&value);
+        buffer.append(data, sizeof(value));
+    };
+
+    appendValue(entry.fitness);
+
+    for (const auto& value : entry.sizes)
+        appendValue(value);
+
+    for (const auto& value : entry.depths)
+        appendValue(value);
+
+    for (const auto& tree : entry.trees)
+    {
+        const uint32_t len = static_cast<uint32_t>(tree.size());
+        appendValue(len);
+        buffer.append(tree);
+    }
+
+    return buffer;
+}
+
+// ================================
+std::vector<char> GlobalHOF::SerializeLocalEntries(const std::vector<SerializedEntry>& localEntries)
+{
+    std::vector<char> buffer;
+    size_t totalSize = 0;
+
+    for (const auto& entry : localEntries)
+    {
+        const std::string serialized = SerializeEntry(entry);
+        totalSize += serialized.size();
+    }
+
+    buffer.reserve(totalSize);
+
+    for (const auto& entry : localEntries)
+    {
+        const std::string serialized = SerializeEntry(entry);
+        buffer.insert(buffer.end(), serialized.begin(), serialized.end());
+    }
+
+    return buffer;
+}
+
+// ================================
+std::vector<GlobalHOF::SerializedEntry> GlobalHOF::DeserializeLocalEntries(const std::vector<char>& buffer,
+                                                                        size_t expectedCount)
+{
+    std::vector<SerializedEntry> entries;
+    entries.reserve(expectedCount);
+
+    size_t pos = 0;
+    for (size_t i = 0; i < expectedCount; ++i)
+    {
+        SerializedEntry entry{};
+
+        auto readValue = [&buffer, &pos](auto& value)
+        {
+            if (pos + sizeof(value) > buffer.size())
+                throw std::runtime_error("Serialized HOF entry is truncated");
+
+            std::memcpy(&value, buffer.data() + pos, sizeof(value));
+            pos += sizeof(value);
+        };
+
+        readValue(entry.fitness);
+
+        for (auto& value : entry.sizes)
+            readValue(value);
+
+        for (auto& value : entry.depths)
+            readValue(value);
+
+        for (auto& tree : entry.trees)
+        {
+            uint32_t len = 0;
+            readValue(len);
+
+            if (pos + len > buffer.size())
+                throw std::runtime_error("Serialized HOF tree string is truncated");
+
+            tree.assign(buffer.data() + pos, buffer.data() + pos + len);
+            pos += len;
+        }
+
+        entries.push_back(entry);
+    }
+
+    return entries;
 }
 
 // ================================
@@ -808,62 +914,52 @@ void GlobalHOF::GatherLocalHOF(
 
             for (int j = 0; j < 4; ++j)
             {
-                std::string treeStr = ind.trees[j].convertToStr();
-                auto& treeBuffer = localEntries[static_cast<size_t>(i)].trees[j];
-                treeBuffer.fill('\0');
-                std::snprintf(
-                    treeBuffer.data(),
-                    treeBuffer.size(),
-                    "%s",
-                    treeStr.c_str());
+                localEntries[static_cast<size_t>(i)].trees[j] = ind.trees[j].convertToStr();
                 localEntries[static_cast<size_t>(i)].sizes[j] = ind.trees[j].Size();
                 localEntries[static_cast<size_t>(i)].depths[j] = ind.trees[j].Depth();
             }
         }
     }
 
-    MPI_Datatype entryType;
-    int blockLengths[] = {1, 4, 4, 4 * 256};
-    MPI_Datatype types[] = {MPI_DOUBLE, MPI_INT, MPI_INT, MPI_CHAR};
-    MPI_Aint offsets[4];
-    offsets[0] = offsetof(SerializedEntry, fitness);
-    offsets[1] = offsetof(SerializedEntry, sizes);
-    offsets[2] = offsetof(SerializedEntry, depths);
-    offsets[3] = offsetof(SerializedEntry, trees);
+    const std::vector<char> sendBuffer = SerializeLocalEntries(localEntries);
+    const int sendCount = static_cast<int>(sendBuffer.size());
 
-    // MPI_Type_create_struct(N_diff_blocks/types, N_elementsInBlock[],
-    //                  memoryDisplacementOfBlock[], typeOfBlock[], &output)
-    MPI_Type_create_struct(4, blockLengths, offsets, types, &entryType);
-    MPI_Type_commit(&entryType);
+    std::vector<int> recvCounts(static_cast<size_t>(worldSize), 0);
+    std::vector<int> displacements(static_cast<size_t>(worldSize), 0);
 
-    std::vector<SerializedEntry> gatheredBuffer(static_cast<size_t>(worldSize) * static_cast<size_t>(NlocalInds));
+    MPI_Gather(&sendCount, 1, MPI_INT,
+               recvCounts.data(), 1, MPI_INT,
+               0, MPI_COMM_WORLD);
 
     if (rank == 0)
     {
-        // MPI_Gather(&sendbuf,sendcnt,sendtype,&recvbuf,recvcount,recvtype,root,comm)
-        MPI_Gather(
-            localEntries.data(), NlocalInds,
-            entryType, gatheredBuffer.data(),
-            NlocalInds, entryType,
+        int totalRecv = 0;
+        for (int i = 0; i < worldSize; ++i)
+        {
+            displacements[i] = totalRecv;
+            totalRecv += recvCounts[i];
+        }
+
+        std::vector<char> recvBuffer(static_cast<size_t>(totalRecv));
+        const char* sendPtr = sendCount > 0 ? sendBuffer.data() : nullptr;
+
+        MPI_Gatherv(
+            const_cast<char*>(sendPtr), sendCount, MPI_CHAR,
+            recvBuffer.data(), recvCounts.data(), displacements.data(), MPI_CHAR,
             0, MPI_COMM_WORLD
         );
 
-        
-        // rank 0 stores the gathered serialized entries for the global HOF
-        gatheredHof = gatheredBuffer;
+        gatheredHof = DeserializeLocalEntries(recvBuffer, static_cast<size_t>(worldSize) * static_cast<size_t>(NlocalInds));
     }
     else
     {
-        // MPI_Gather(&sendbuf,sendcnt,sendtype,&recvbuf,recvcount,recvtype,root,comm)
-        MPI_Gather(
-            localEntries.data(), NlocalInds,
-            entryType, nullptr, 
-            NlocalInds, entryType,
+        const char* sendPtr = sendCount > 0 ? sendBuffer.data() : nullptr;
+        MPI_Gatherv(
+            const_cast<char*>(sendPtr), sendCount, MPI_CHAR,
+            nullptr, nullptr, nullptr, MPI_CHAR,
             0, MPI_COMM_WORLD
         );
     }
-
-    MPI_Type_free(&entryType);
 }
 
 // ================================
