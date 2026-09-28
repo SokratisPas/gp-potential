@@ -14,4 +14,10 @@ add_executable(
 
 target_link_libraries(gp-potential PRIVATE MPI::MPI_CXX)
 
-target_include_directories(gp-potential PRIVATE ${MPI_CXX_INCLUDE_DIRS})
+target_include_directories(
+    gp-potential PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/src
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/parsers
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/genetic-program
+    ${MPI_CXX_INCLUDE_DIRS}
+)

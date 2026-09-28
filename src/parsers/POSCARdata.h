@@ -6,7 +6,7 @@
 #include <string>
 #include <vector>
 
-#include "xyz-parser.h"
+#include "parsers/xyz-parser.h"
 
 // header file for reading POSCAR files for 1 element potential
 // for 2 element check xyz-parser.h
