@@ -1,15 +1,42 @@
+#population size, each process has its own island of pop_size individuals
 pop_size = 100
+
+#generations
 gens = 50
+
+#initial depth of trees, full grown method
 initial_ind_max_depth = 5
+
+#tournament selection size
 tournament_size = 3
+
+#mutation probability, crossover prob = 1 - mut prob
 mutation_prob = 0.2
+
+#constants max min values
 const_min = -10.0
 const_max = 10.0
+
+#sample of snapshots to evaluate fitness
 ndata_sample = 50
+
+#sample of .xyz extented data, use less data for testing
 last_n_data = 100
+
+#cutoff radius (Angstrom)
 cutoff = 5.0
+
+#Number of individuals each island sends to globalHoF
 n_local_inds = 2
+
+#Generations to send individuals to globalHoF
 ngens_to_send_inds = 10
+
+#Generations to perform migration
 ngens_to_migration = 20
+
+#data path
 data_path = src/data/W-Mo/trainset.xyz
+
+#ouput directory in gp-potential/output
 output_dir = output

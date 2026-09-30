@@ -56,16 +56,10 @@ cmake --build build
 
 ## Execution
 
-Run the solver with MPI using the configured input file:
+Run the solver with MPI using the input file:
 
 ```bash
-mpirun -np N_PROCESSES ./build/gp-potential --config input.txt
-```
-
-You may also provide an explicit output directory:
-
-```bash
-mpirun -np N_PROCESSES ./build/gp-potential --config input.txt --output-dir output
+mpirun -np N_PROCESSES ./build/gp-potential --input input.txt
 ```
 
 Use the help flag to inspect available command-line options:

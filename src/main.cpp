@@ -20,23 +20,16 @@
 
 int main(int argc, char *argv[])
 {
-    std::filesystem::path configPath = "input.txt";
-    std::filesystem::path outputDir = "output";
+    std::filesystem::path configPath = "input.txt"; // gp-potential/input.txt
 
     for (int i = 1; i < argc; ++i)
     {
         std::string arg = argv[i];
-        if (arg == "--config")
+        if (arg == "--input")
         {
             if (i + 1 >= argc)
-                throw std::runtime_error("--config requires a path");
+                throw std::runtime_error("--input requires a path");
             configPath = argv[++i];
-        }
-        else if (arg == "--output-dir")
-        {
-            if (i + 1 >= argc)
-                throw std::runtime_error("--output-dir requires a path");
-            outputDir = argv[++i];
         }
         else if (arg == "--help" || arg == "-h")
         {
@@ -50,12 +43,12 @@ int main(int argc, char *argv[])
     }
 
     const GPConfig config = loadConfig(configPath);
-    if (!config.outputDir.empty())
-        outputDir = config.outputDir;
 
     const double cutoff = config.cutoff;
     const std::pair<double, double> constRange = { config.constMin, config.constMax };
 
+    // --------------------------------------
+    // DATA
     XYZParser W_Mo_parser(cutoff);
     std::vector<Snapshot> W_Mo_data = W_Mo_parser.parse(config.dataPath);
 
@@ -67,6 +60,9 @@ int main(int argc, char *argv[])
 
     GlobalHOF globalHof;
 
+
+    // --------------------------------------
+    // MPI
     int numtasks, rank;
 
     MPI_Init(&argc, &argv);
@@ -77,7 +73,8 @@ int main(int argc, char *argv[])
         throw std::runtime_error("Give process number >= 2!\n");
     }
 
-
+    // --------------------------------------
+    // Genetic Program
     GeneticProgram geneticProgram(
         config.popSize,
         config.gens,
@@ -94,14 +91,14 @@ int main(int argc, char *argv[])
         config.NlocalInds,
         config.NgensToSendInds,
         config.NgensToMigration,
-        outputDir
+        config.outputDir
     );
 
     geneticProgram.Run();
 
     if (rank == 0)
     {
-        globalHof.writeGlobalHOF(rank, outputDir);
+        globalHof.writeGlobalHOF(rank, config.outputDir);
     }
 
     MPI_Finalize();

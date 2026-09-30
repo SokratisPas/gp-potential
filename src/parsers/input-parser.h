@@ -123,8 +123,7 @@ GPConfig loadConfig(const std::filesystem::path& configPath)
 
 void printUsage(const char* programName)
 {
-    std::cout << "Usage: " << programName << " [--config path] [--output-dir path]\n";
+    std::cout << "Usage: " << programName << " [--input path] \n";
     std::cout << "Defaults:\n";
-    std::cout << "  --config /input.txt\n";
-    std::cout << "  --output-dir /output\n";
+    std::cout << "  --input /input.txt\n";
 }
