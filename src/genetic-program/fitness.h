@@ -36,6 +36,13 @@ double fitnessFun_2elements(const std::array<Tree,4>& trees,
 	{
 		const Snapshot& snapshot = data[index];
 
+		if (snapshot.numberOfAtoms < 1)
+			throw std::runtime_error("nubmer of atoms in snapshot < 1.");
+
+		// catch one atom snapshot
+		if (snapshot.numberOfAtoms == 1)
+			continue;
+
 		double EsnapshotTotal = 0.0;
 		
 		for (const auto& atom : snapshot.atoms)

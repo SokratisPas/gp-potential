@@ -45,6 +45,12 @@ The project requires the following tools and libraries:
 - MPI implementation.
 - A training dataset in a compatible atomic-structure format.
 
+## Clone
+
+```bash
+git clone https://github.com/SokratisPas/gp-potential.git
+```
+
 ## Build
 
 From the project root, configure and build the executable as follows:
