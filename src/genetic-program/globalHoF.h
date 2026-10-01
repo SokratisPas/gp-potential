@@ -12,6 +12,7 @@
 class GlobalHOF
 {
 public:
+    // struct for serialized individuals to send with MPI
     struct SerializedEntry
     {
         double fitness = std::numeric_limits<double>::infinity();
@@ -32,7 +33,8 @@ public:
                        int NlocalInds,
                        const std::vector<Individual>& localHof);
 
-    void writeGlobalHOF(int rank, const std::filesystem::path& outputDir = "output");  // root writes the gathered HOF
+    void writeGlobalHOF(int rank,
+        const std::filesystem::path& outputDir = "output");  // root writes the gathered HOF
 };
 
 
@@ -144,6 +146,8 @@ void GlobalHOF::GatherLocalHOF(
     int NlocalInds,
     const std::vector<Individual>& localHof)
 {
+    // ------------------------------------------
+    // build the serialized local entries
     std::vector<SerializedEntry> localEntries(static_cast<size_t>(NlocalInds));
 
     for (int i = 0; i < NlocalInds; ++i)
@@ -151,8 +155,9 @@ void GlobalHOF::GatherLocalHOF(
         if (i < static_cast<int>(localHof.size()))
         {
             const auto& ind = localHof[static_cast<size_t>(i)];
-            localEntries[static_cast<size_t>(i)].fitness = ind.fitness;
+            localEntries[static_cast<size_t>(i)].fitness = ind.fitness; // save fitness
 
+            // save trees, sizes, depths
             for (int j = 0; j < 4; ++j)
             {
                 localEntries[static_cast<size_t>(i)].trees[j] = ind.trees[j].convertToStr();
@@ -160,18 +165,33 @@ void GlobalHOF::GatherLocalHOF(
                 localEntries[static_cast<size_t>(i)].depths[j] = ind.trees[j].Depth();
             }
         }
+        else 
+        {
+            throw std::runtime_error("Local HOF size is less than NlocalInds");
+        }
     }
 
-    const std::vector<char> sendBuffer = SerializeLocalEntries(localEntries);
+    // ------------------------------------------
+    // gather the byte counts of the sendBuffer from all ranks to rank 0
+    const std::vector<char> sendBuffer = SerializeLocalEntries(localEntries);   // serialized individuals to send
     const int sendCount = static_cast<int>(sendBuffer.size());
 
     std::vector<int> recvCounts(static_cast<size_t>(worldSize), 0);
     std::vector<int> displacements(static_cast<size_t>(worldSize), 0);
 
-    MPI_Gather(&sendCount, 1, MPI_INT,
-               recvCounts.data(), 1, MPI_INT,
-               0, MPI_COMM_WORLD);
+    MPI_Gather(
+        &sendCount,         // const void *sendbuf
+        1,                  // int sendcount
+        MPI_INT,            // MPI_Datatype sendtype
+        recvCounts.data(),  // void *recvbuf
+        1,                  // int recvcount
+        MPI_INT,            // MPI_Datatype recvtype
+        0,                  // int root
+        MPI_COMM_WORLD      // MPI_Comm comm
+    );
 
+    // ------------------------------------------
+    // gather the data (now we know the size of each sendBuffer)
     if (rank == 0)
     {
         int totalRecv = 0;
@@ -184,21 +204,35 @@ void GlobalHOF::GatherLocalHOF(
         std::vector<char> recvBuffer(static_cast<size_t>(totalRecv));
         const char* sendPtr = sendCount > 0 ? sendBuffer.data() : nullptr;
 
+        // MPI_Gatherv to send different sized buffers from each rank to rank 0
         MPI_Gatherv(
-            const_cast<char*>(sendPtr), sendCount, MPI_CHAR,
-            recvBuffer.data(), recvCounts.data(), displacements.data(), MPI_CHAR,
-            0, MPI_COMM_WORLD
+            const_cast<char*>(sendPtr),     // const void *sendbuf
+            sendCount,                      // int sendcount
+            MPI_CHAR,                       // MPI_Datatype sendtype
+            recvBuffer.data(),              // void *recvbuf
+            recvCounts.data(),              // const int recvcounts[]
+            displacements.data(),           // const int displs[]
+            MPI_CHAR,                       // MPI_Datatype recvtype
+            0,                              // int root
+            MPI_COMM_WORLD                  // MPI_Comm comm
         );
 
-        gatheredHof = DeserializeLocalEntries(recvBuffer, static_cast<size_t>(worldSize) * static_cast<size_t>(NlocalInds));
+        gatheredHof = DeserializeLocalEntries(recvBuffer, 
+            static_cast<size_t>(worldSize) * static_cast<size_t>(NlocalInds));
     }
     else
     {
         const char* sendPtr = sendCount > 0 ? sendBuffer.data() : nullptr;
         MPI_Gatherv(
-            const_cast<char*>(sendPtr), sendCount, MPI_CHAR,
-            nullptr, nullptr, nullptr, MPI_CHAR,
-            0, MPI_COMM_WORLD
+            const_cast<char*>(sendPtr), // const void *sendbuf
+            sendCount,                  // int sendcount
+            MPI_CHAR,                   // MPI_Datatype sendtype
+            nullptr,                    // void *recvbuf
+            nullptr,                    // const int recvcounts[]
+            nullptr,                    // const int displs[]
+            MPI_CHAR,                   // MPI_Datatype recvtype
+            0,                          // int root
+            MPI_COMM_WORLD              // MPI_Comm comm
         );
     }
 }

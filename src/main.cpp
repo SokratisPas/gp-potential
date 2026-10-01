@@ -20,6 +20,8 @@
 
 int main(int argc, char *argv[])
 {
+    // --------------------------------------
+    // Input handling
     std::filesystem::path configPath = "input.txt"; // default: gp-potential/input.txt
 
     for (int i = 1; i < argc; ++i)
@@ -42,14 +44,14 @@ int main(int argc, char *argv[])
         }
     }
 
+    // load input parameters 
     const GPConfig config = loadConfig(configPath);
 
-    const double cutoff = config.cutoff;
     const std::pair<double, double> constRange = { config.constMin, config.constMax };
 
     // --------------------------------------
     // DATA
-    XYZParser W_Mo_parser(cutoff);
+    XYZParser W_Mo_parser(config.cutoff);
     std::vector<Snapshot> W_Mo_data = W_Mo_parser.parse(config.dataPath);
 
     if (config.lastNdata <= 0 || config.lastNdata > static_cast<int>(W_Mo_data.size()))
@@ -59,7 +61,6 @@ int main(int argc, char *argv[])
     std::vector<Snapshot> reduced_data(W_Mo_data.end() - config.lastNdata, W_Mo_data.end());
 
     GlobalHOF globalHof;
-
 
     // --------------------------------------
     // MPI
