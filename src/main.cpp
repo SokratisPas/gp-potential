@@ -20,7 +20,7 @@
 
 int main(int argc, char *argv[])
 {
-    std::filesystem::path configPath = "input.txt"; // gp-potential/input.txt
+    std::filesystem::path configPath = "input.txt"; // default: gp-potential/input.txt
 
     for (int i = 1; i < argc; ++i)
     {

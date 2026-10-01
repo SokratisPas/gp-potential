@@ -4,6 +4,7 @@
 #include <numeric>
 #include <random>
 #include <vector>
+
 #include "treeClass.h"
 #include "POSCARdata.h"
 #include "xyz-parser.h"
@@ -16,10 +17,7 @@ double fitnessFun_2elements(const std::array<Tree,4>& trees,
 	std::mt19937& rng)
 {
 	if (data.empty() || dataSample <= 0)
-	{
-		std::cerr << "Error: No data provided or invalid data sample size." << std::endl;
-		return 0.0;
-	}
+		throw std::runtime_error("Error: No data provided or invalid data sample size.");
 
 	// take dataSample random snapshots from data
 	const int sampleCount = std::min(dataSample, static_cast<int>(data.size()));
@@ -37,7 +35,7 @@ double fitnessFun_2elements(const std::array<Tree,4>& trees,
 		const Snapshot& snapshot = data[index];
 
 		if (snapshot.numberOfAtoms < 1)
-			throw std::runtime_error("nubmer of atoms in snapshot < 1.");
+			throw std::runtime_error("Warning: Snapshot has no atoms.");		
 
 		// catch one atom snapshot
 		if (snapshot.numberOfAtoms == 1)
