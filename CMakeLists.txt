@@ -6,13 +6,14 @@ set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 find_package(MPI REQUIRED)
+find_package(OpenMP REQUIRED)
 
 add_executable(
     gp-potential
     src/main.cpp
 )
 
-target_link_libraries(gp-potential PRIVATE MPI::MPI_CXX)
+target_link_libraries(gp-potential PRIVATE MPI::MPI_CXX OpenMP::OpenMP_CXX)
 
 target_include_directories(
     gp-potential PRIVATE

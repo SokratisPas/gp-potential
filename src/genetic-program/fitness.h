@@ -1,8 +1,10 @@
 #pragma once
 
 #include <algorithm>
+#include <exception>
 #include <numeric>
 #include <random>
+#include <stdexcept>
 #include <vector>
 
 #include "treeClass.h"
@@ -29,47 +31,69 @@ double fitnessFun_2elements(const std::array<Tree,4>& trees,
 	std::vector<int> sampledIndices(indices.begin(), indices.begin() + sampleCount);
 
 	double energyLossTotal = 0.0;
+	std::exception_ptr evaluationError;
 
-	for (int index : sampledIndices)
+	// parallel region with openMP
+	#pragma omp parallel reduction(+: energyLossTotal) shared(evaluationError)
 	{
-		const Snapshot& snapshot = data[index];
-
-		if (snapshot.numberOfAtoms < 1)
-			throw std::runtime_error("Warning: Snapshot has no atoms.");		
-
-		// catch one atom snapshot
-		if (snapshot.numberOfAtoms == 1)
-			continue;
-
-		double EsnapshotTotal = 0.0;
-		
-		for (const auto& atom : snapshot.atoms)
+		#pragma omp for schedule(static)
+		for (std::size_t sampleIndex = 0; sampleIndex < sampledIndices.size(); ++sampleIndex)
 		{
-			for (const auto& neighbor : atom.neighbors)
+			try
 			{
-				double r = neighbor.distance;
+				const Snapshot& snapshot = data[sampledIndices[sampleIndex]];
 
-				double Vlocal = 0.0;
-				double Vtotal = 0.0;
-				
-				if (atom.type == "W" && neighbor.type == "W")
-					Vlocal = trees[0].evaluate(r);
-				else if (atom.type == "W" && neighbor.type == "Mo")
-					Vlocal = trees[1].evaluate(r);
-				else if (atom.type == "Mo" && neighbor.type == "Mo")
-					Vlocal = trees[2].evaluate(r);
-				
-				Vtotal = Vlocal + trees[3].evaluate(r);
-				EsnapshotTotal += Vtotal;
+				if (snapshot.numberOfAtoms < 1)
+					throw std::runtime_error("Warning: Snapshot has no atoms.");
+
+				// catch one atom snapshot
+				// also maybe revisit this later
+				if (snapshot.numberOfAtoms == 1)
+					continue;
+
+				double EsnapshotTotal = 0.0;
+
+				for (const auto& atom : snapshot.atoms)
+				{
+					for (const auto& neighbor : atom.neighbors)
+					{
+						double r = neighbor.distance;
+
+						double Vlocal = 0.0;
+						double Vtotal = 0.0;
+
+						if (atom.type == "W" && neighbor.type == "W")
+							Vlocal = trees[0].evaluate(r);
+						else if (atom.type == "W" && neighbor.type == "Mo")
+							Vlocal = trees[1].evaluate(r);
+						else if (atom.type == "Mo" && neighbor.type == "Mo")
+							Vlocal = trees[2].evaluate(r);
+
+						Vtotal = Vlocal + trees[3].evaluate(r);
+						EsnapshotTotal += Vtotal;
+					}
+				}
+
+				// we divide by number of atoms to acount for bigger snapshots
+				energyLossTotal +=
+					((EsnapshotTotal - snapshot.energy) *
+					 (EsnapshotTotal - snapshot.energy))
+					/ static_cast<double>(snapshot.numberOfAtoms);
+			}
+			catch (...)
+			{
+				#pragma omp critical(fitness_evaluation_error)
+				{
+					if (!evaluationError)
+						evaluationError = std::current_exception();
+				}
 			}
 		}
-
-		// we divide by number of atoms to acount for bigger snapshots
-		energyLossTotal +=
-			((EsnapshotTotal - snapshot.energy) *
-			 (EsnapshotTotal - snapshot.energy))
-			/ static_cast<double>(snapshot.numberOfAtoms);
 	}
+	// end of parallel region
+
+	if (evaluationError)
+		std::rethrow_exception(evaluationError);
 
 	// Fitness = MSE = sum(DE ^2) / N
 	return energyLossTotal / static_cast<double>(sampleCount);
@@ -78,6 +102,7 @@ double fitnessFun_2elements(const std::array<Tree,4>& trees,
 
 // -----------------------------------------------
 // this function is not used for the 2-elements potential
+// fix later
 constexpr double compPar = 0.3;
 
 double fitnessFunction(const std::array<Tree,4>& trees, 
