@@ -6,3 +6,4 @@ output/*
 *.out
 run_gp.sh
 plots/
+.venv/

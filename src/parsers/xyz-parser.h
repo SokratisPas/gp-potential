@@ -177,7 +177,7 @@ Vec3 XYZParser::parseLattice(const std::string& line)
             b = (0, Ly, 0)
             c = (0, 0, Lz)
 
-    Therefore we only need the diagonal values.
+    So we only need the diagonal values.
         */
 
     return {

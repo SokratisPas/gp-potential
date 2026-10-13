@@ -34,7 +34,8 @@ public:
     void Run();
     
     // Constructor
-    GeneticProgram(int populationSize,
+    explicit GeneticProgram(
+        int populationSize,
         int generations, 
         int initialIndMaxDepth,
         int tournamentSize,
