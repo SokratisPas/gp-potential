@@ -62,10 +62,10 @@ cmake --build build
 
 ## Execution
 
-Run the solver with MPI using the input file:
+Run the executable from /build with MPI and OpenMP using the input file:
 
 ```bash
-mpirun -np N_PROCESSES ./build/gp-potential --input input.txt
+OMP_NUM_THREADS=YOUR_N_THREADS mpirun -np YOUR_N_PROCESSES ./build/gp-potential --input input.txt
 ```
 
 Use the help flag to inspect available command-line options:
@@ -93,5 +93,5 @@ The solver parameters are defined in [input.txt](input.txt). The settings includ
 | n_local_inds | number of individuals each island send to HoF |
 | ngens_to_send_inds | number of generations to send individuals to HoF |
 | ngens_to_migration | number of generations to perform migration |
-| data_path |  |
-| output_dir |  |
+| data_path |  data path |
+| output_dir | output directory (already included) |

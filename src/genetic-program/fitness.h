@@ -11,6 +11,7 @@
 #include "POSCARdata.h"
 #include "xyz-parser.h"
 
+// #include <omp.h>   (for OpenMP functions)
 
 // -----------------------------------------------
 double fitnessFun_2elements(const std::array<Tree,4>& trees,
@@ -82,7 +83,7 @@ double fitnessFun_2elements(const std::array<Tree,4>& trees,
 			}
 			catch (...)
 			{
-				#pragma omp critical(fitness_evaluation_error)
+				#pragma omp critical(fitness_evaluation_error_lock)
 				{
 					if (!evaluationError)
 						evaluationError = std::current_exception();
@@ -91,7 +92,7 @@ double fitnessFun_2elements(const std::array<Tree,4>& trees,
 		}
 	}
 	// end of parallel region
-
+	// throw exception now from master thread
 	if (evaluationError)
 		std::rethrow_exception(evaluationError);
 
