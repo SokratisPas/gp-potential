@@ -688,9 +688,17 @@ void GeneticProgram::Run()
         {
             std::vector<Individual> localHof;
             localHof.reserve(static_cast<size_t>(NlocalInds));
-            for (int i = 0; i < NlocalInds; ++i)
+
+            int popIndex = 0; // use to avoid send -Infinity fitness individuals
+
+            for (int indsSend = 0; indsSend < NlocalInds; ++indsSend)
             {
-                localHof.push_back(population[i]);
+                while (std::isinf(population[popIndex].fitness))
+                {
+                    popIndex++;
+                }
+                localHof.push_back(population[popIndex]);
+                popIndex++;
             }
 
             globalHof->GatherLocalHOF(rank, numTasks, NlocalInds, localHof);
@@ -700,6 +708,8 @@ void GeneticProgram::Run()
         // migration (every NgensToMigration steps)
         if (globalHof != nullptr && generation > 0 && generation % NgensToMigration == 0)
         {
+            globalHof->BroadcastGlobalHOF(rank);
+
             if (!globalHof->gatheredHof.empty())
             {
                 // chose number of migrants in [1, 5]

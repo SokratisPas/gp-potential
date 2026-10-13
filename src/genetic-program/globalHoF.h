@@ -33,6 +33,8 @@ public:
                        int NlocalInds,
                        const std::vector<Individual>& localHof);
 
+    void BroadcastGlobalHOF(int rank);
+
     void writeGlobalHOF(int rank,
         const std::filesystem::path& outputDir = "output");  // root writes the gathered HOF
 };
@@ -235,6 +237,49 @@ void GlobalHOF::GatherLocalHOF(
             MPI_COMM_WORLD              // MPI_Comm comm
         );
     }
+}
+
+// ================================
+void GlobalHOF::BroadcastGlobalHOF(int rank)
+{
+    int entryCount = rank == 0 ? static_cast<int>(gatheredHof.size()) : 0;
+    MPI_Bcast(
+        &entryCount,    // void* buffer
+        1,              // int count
+        MPI_INT,        // MPI_Datatype datatype
+        0,              // int root
+        MPI_COMM_WORLD  // MPI_Comm comm
+    );
+
+    std::vector<char> buffer;
+    int bufferSize = 0;
+    if (rank == 0)
+    {
+        buffer = SerializeLocalEntries(gatheredHof);
+        bufferSize = static_cast<int>(buffer.size());
+    }
+
+    MPI_Bcast(
+        &bufferSize,
+        1,
+        MPI_INT,
+        0,
+        MPI_COMM_WORLD
+    );
+
+    if (rank != 0)
+        buffer.resize(static_cast<size_t>(bufferSize));
+
+    MPI_Bcast(
+        buffer.data(),
+        bufferSize,
+        MPI_CHAR,
+        0,
+        MPI_COMM_WORLD
+    );
+
+    if (rank != 0)
+        gatheredHof = DeserializeLocalEntries(buffer, static_cast<size_t>(entryCount));
 }
 
 // ================================

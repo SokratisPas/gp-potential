@@ -25,17 +25,6 @@ The workflow is organized as follows:
 5. Use migration between parallel islands and retain elite individuals in a Hall of Fame.
 6. Record final results in the output directory for analysis and comparison.
 
-## Repository Structure
-
-| Path | Description |
-| --- | --- |
-| [CMakeLists.txt](CMakeLists.txt) | Project configuration for CMake and MPI build setup. |
-| [input.txt](input.txt) | Main runtime configuration for population size, evolution parameters, dataset path, and output directory. |
-| [src/main.cpp](src/main.cpp) | Entry point for MPI setup, configuration loading, and orchestration of the evolutionary run. |
-| [src/parsers](src/parsers) | Data parsers for XYZ and POSCAR-style inputs. |
-| [src/data](src/data) | Training datasets used for model fitting. |
-| [output](output) | Generated statistics and HoF outputs from optimization runs. |
-
 ## Requirements
 
 The project requires the following tools and libraries:
