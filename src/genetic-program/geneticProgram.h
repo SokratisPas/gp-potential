@@ -12,6 +12,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <cctype>
+#include <cmath>
 #include <limits>
 #include <string>
 
@@ -636,6 +637,7 @@ void GeneticProgram::Run()
             const Individual& parent2 = TournamentSelection();
             std::pair<Individual, Individual> children{ parent1, parent2 };
             
+            // crossover to all 4 potential trees
             for (int caseInd = 0; caseInd < 4; caseInd++)
             {
                 children = Crossover(children.first, children.second, caseInd);
@@ -689,19 +691,20 @@ void GeneticProgram::Run()
             std::vector<Individual> localHof;
             localHof.reserve(static_cast<size_t>(NlocalInds));
 
-            int popIndex = 0; // use to avoid send -Infinity fitness individuals
-
-            for (int indsSend = 0; indsSend < NlocalInds; ++indsSend)
+            for (const auto& individual : population)
             {
-                while (std::isinf(population[popIndex].fitness))
-                {
-                    popIndex++;
-                }
-                localHof.push_back(population[popIndex]);
-                popIndex++;
+                if (localHof.size() >= static_cast<size_t>(NlocalInds))
+                    break;
+
+                if (std::isfinite(individual.fitness))
+                    localHof.push_back(individual);
             }
 
-            globalHof->GatherLocalHOF(rank, numTasks, NlocalInds, localHof);
+            globalHof->GatherLocalHOF(
+                rank,
+                numTasks,
+                static_cast<int>(localHof.size()),
+                localHof);
         }
 
         // --------------------------
@@ -751,7 +754,7 @@ void GeneticProgram::Run()
     }
 
     hofFile << "=======================================\n"
-        << "HOF 10 best individuals:\n"
+        << "Local HOF | rank: " << rank << "\n"
         << "=======================================\n";
 
 	for (int i = 0; i < 10; i++)

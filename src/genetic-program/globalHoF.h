@@ -30,7 +30,7 @@ public:
 
     void GatherLocalHOF(int rank,
                        int worldSize,
-                       int NlocalInds,
+                       int localEntryCount,
                        const std::vector<Individual>& localHof);
 
     void BroadcastGlobalHOF(int rank);
@@ -145,14 +145,14 @@ std::vector<GlobalHOF::SerializedEntry> GlobalHOF::DeserializeLocalEntries(const
 void GlobalHOF::GatherLocalHOF(
     int rank,
     int worldSize,
-    int NlocalInds,
+    int localEntryCount,
     const std::vector<Individual>& localHof)
 {
     // ------------------------------------------
     // build the serialized local entries
-    std::vector<SerializedEntry> localEntries(static_cast<size_t>(NlocalInds));
+    std::vector<SerializedEntry> localEntries(static_cast<size_t>(localEntryCount));
 
-    for (int i = 0; i < NlocalInds; ++i)
+    for (int i = 0; i < localEntryCount; ++i)
     {
         if (i < static_cast<int>(localHof.size()))
         {
@@ -179,6 +179,7 @@ void GlobalHOF::GatherLocalHOF(
     const int sendCount = static_cast<int>(sendBuffer.size());
 
     std::vector<int> recvCounts(static_cast<size_t>(worldSize), 0);
+    std::vector<int> recvEntryCounts(static_cast<size_t>(worldSize), 0);
     std::vector<int> displacements(static_cast<size_t>(worldSize), 0);
 
     MPI_Gather(
@@ -190,6 +191,17 @@ void GlobalHOF::GatherLocalHOF(
         MPI_INT,            // MPI_Datatype recvtype
         0,                  // int root
         MPI_COMM_WORLD      // MPI_Comm comm
+    );
+
+    MPI_Gather(
+        &localEntryCount,
+        1,
+        MPI_INT,
+        recvEntryCounts.data(),
+        1,
+        MPI_INT,
+        0,
+        MPI_COMM_WORLD
     );
 
     // ------------------------------------------
@@ -219,8 +231,11 @@ void GlobalHOF::GatherLocalHOF(
             MPI_COMM_WORLD                  // MPI_Comm comm
         );
 
-        gatheredHof = DeserializeLocalEntries(recvBuffer, 
-            static_cast<size_t>(worldSize) * static_cast<size_t>(NlocalInds));
+        size_t totalEntryCount = 0;
+        for (const int entryCount : recvEntryCounts)
+            totalEntryCount += static_cast<size_t>(entryCount);
+
+        gatheredHof = DeserializeLocalEntries(recvBuffer, totalEntryCount);
     }
     else
     {
