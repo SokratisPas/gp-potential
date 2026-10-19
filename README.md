@@ -32,7 +32,7 @@ The project requires the following tools and libraries:
 - CMake 3.10 or newer.
 - C++17 compiler.
 - MPI implementation.
-- A training dataset in a compatible atomic-structure format.
+- OpenMP implementation.
 
 ## Clone
 

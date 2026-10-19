@@ -96,7 +96,7 @@ double fitnessFun_2elements(const std::array<Tree,4>& trees,
 	if (evaluationError)
 		std::rethrow_exception(evaluationError);
 
-	// Fitness = MSE = sum(DE ^2) / N
+	// Fitness = MSE = sum[(DE ^2)/Natoms] / Nsnapshots
 	return energyLossTotal / static_cast<double>(sampleCount);
 }
 
