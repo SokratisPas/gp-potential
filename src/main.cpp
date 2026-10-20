@@ -5,7 +5,6 @@
 #include <functional>
 #include <stdexcept>
 
-
 #include "mpi.h"
 
 #include "primitives.h"
@@ -16,10 +15,12 @@
 #include "fitness.h"
 #include "xyz-parser.h"
 #include "input-parser.h"
-
+#include "timer.h"
 
 int main(int argc, char *argv[])
 {
+    Timer totalTimer("Total Timer");
+
     // --------------------------------------
     // Input handling
     std::filesystem::path configPath = "input.txt"; // default: gp-potential/input.txt
@@ -44,24 +45,6 @@ int main(int argc, char *argv[])
         }
     }
 
-    // load input parameters 
-    const GPConfig config = loadConfig(configPath);
-
-    const std::pair<double, double> constRange = { config.constMin, config.constMax };
-
-    // --------------------------------------
-    // DATA
-    XYZParser W_Mo_parser(config.cutoff);
-    std::vector<Snapshot> W_Mo_data = W_Mo_parser.parse(config.dataPath);
-
-    if (config.lastNdata <= 0 || config.lastNdata > static_cast<int>(W_Mo_data.size()))
-        throw std::runtime_error("last_n_data is out of range for the dataset size");
-
-    // get last data 
-    std::vector<Snapshot> reduced_data(W_Mo_data.end() - config.lastNdata, W_Mo_data.end());
-
-    GlobalHOF globalHof;
-
     // --------------------------------------
     // MPI
     int numtasks, rank;
@@ -73,6 +56,26 @@ int main(int argc, char *argv[])
     {
         throw std::runtime_error("Give process number >= 2!\n");
     }
+
+    // --------------------------------------
+    // load input parameters 
+    const GPConfig config = loadConfig(configPath);
+
+    const std::pair<double, double> constRange = { config.constMin, config.constMax };
+
+    // --------------------------------------
+    // DATA
+    XYZParser W_Mo_parser(config.cutoff);
+    std::vector<Snapshot> W_Mo_data = W_Mo_parser.parse(config.dataPath, rank);
+
+    if (config.lastNdata <= 0 || config.lastNdata > static_cast<int>(W_Mo_data.size()))
+        throw std::runtime_error("last_n_data is out of range for the dataset size");
+
+    // get last data 
+    std::vector<Snapshot> reduced_data(W_Mo_data.end() - config.lastNdata, W_Mo_data.end());
+
+    GlobalHOF globalHof;
+
 
     // --------------------------------------
     // Genetic Program
@@ -101,6 +104,8 @@ int main(int argc, char *argv[])
     {
         globalHof.writeGlobalHOF(rank, config.outputDir);
     }
+
+    totalTimer.setRank(rank);
 
     MPI_Finalize();
 

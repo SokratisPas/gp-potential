@@ -24,6 +24,7 @@
 #include "POSCARdata.h"
 #include "xyz-parser.h"
 #include "globalHoF.h"
+#include "timer.h"
 
 
 
@@ -577,6 +578,8 @@ void GeneticProgram::SortPopulation()
 // ================================
 void GeneticProgram::Run()
 {
+    Timer processTimer("Run timer", rank);
+
     // create output dir (configured output dir / processID/)
     const std::filesystem::path outputDir = std::filesystem::absolute(outputDirectory) / std::to_string(rank);
     std::filesystem::create_directories(outputDir);

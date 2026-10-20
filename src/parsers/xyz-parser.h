@@ -8,6 +8,8 @@
 #include <stdexcept>
 #include <algorithm>
 
+#include "timer.h"
+
 struct Vec3
 {
     double x = 0.0;
@@ -51,7 +53,7 @@ public:
     }
 
     // vector of snapshots
-    std::vector<Snapshot> parse(const std::string& filename);  
+    std::vector<Snapshot> parse(const std::string& filename, int processRank);  
 
 private:
 
@@ -65,8 +67,10 @@ private:
 
 
 // ------------------------------------------------
-std::vector<Snapshot> XYZParser::parse(const std::string& filename)
+std::vector<Snapshot> XYZParser::parse(const std::string& filename, int processRank)
 {
+    Timer inputParseTimer("input xyz parser", processRank);
+
     std::ifstream file(filename);
 
     if (!file.is_open())
