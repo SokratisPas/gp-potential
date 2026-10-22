@@ -35,6 +35,9 @@ ngens_to_send_inds = 10
 #Generations to perform migration
 ngens_to_migration = 20
 
+#Generations to update local globalHoF
+NgensToUpd_LHOF = 20
+
 #data path
 data_path = src/data/W-Mo/trainset.xyz
 

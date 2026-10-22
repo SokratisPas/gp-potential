@@ -1,0 +1,13 @@
+/home/sokratis/projects/gp-potential/build/gp-potential
+/home/sokratis/spack/opt/spack/linux-alderlake/hpctoolkit-2026.0.1-iwpqlw6rbar67zy5zdfzqswrwpdk2aui/lib/libhpcrun.so
+/usr/lib/x86_64-linux-gnu/ld-linux-x86-64.so.2
+/usr/lib/x86_64-linux-gnu/libc.so.6
+/usr/lib/x86_64-linux-gnu/libgomp.so.1.0.0
+/usr/lib/x86_64-linux-gnu/libm.so.6
+/usr/lib/x86_64-linux-gnu/libmpi.so.40.40.7
+/usr/lib/x86_64-linux-gnu/libopen-pal.so.80.0.5
+/usr/lib/x86_64-linux-gnu/libstdc++.so.6.0.35
+/usr/lib/x86_64-linux-gnu/libucm.so.0.0.0
+/usr/lib/x86_64-linux-gnu/libucp.so.0.0.0
+/usr/lib/x86_64-linux-gnu/libucs.so.0.0.0
+/usr/lib/x86_64-linux-gnu/pmix2/lib/libpmix.so.2.13.9

@@ -314,15 +314,18 @@ void GlobalHOF::writeGlobalHOF(int rank, const std::filesystem::path& outputDir)
         throw std::runtime_error("Failed to open output file: " + hofFilePathMaster.string());
     }
 
+    int cntr = 1;   // counter for every individual
     for (const auto& entry : gatheredHof)
     {
-        hofFileGlobal << "=====================\n"
+        hofFileGlobal << "=========== " << cntr << " ===========\n"
             << "Fitness : " << entry.fitness << "\n"
             << "Size : " << entry.sizes[0] << ", " << entry.sizes[1] << ", "
             << entry.sizes[2] << ", " << entry.sizes[3] << "\n"
             << "Depth : " << entry.depths[0] << ", " << entry.depths[1] << ", "
             << entry.depths[2] << ", " << entry.depths[3] << "\n"
             << "Potentials : \n";
+
+        cntr++;
 
         for (int i = 0; i < 4; ++i)
         {

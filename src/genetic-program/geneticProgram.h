@@ -15,6 +15,7 @@
 #include <cmath>
 #include <limits>
 #include <string>
+#include <stdexcept>
 
 #include "mpi.h"
 
@@ -56,6 +57,7 @@ public:
         int NlocalInds,
         int NgensToSendInds,
         int NgensToMigration,
+        int NgensToUpd_LHOF,
         const std::filesystem::path& outputDir = "output"
     )
         :
@@ -74,11 +76,12 @@ public:
         NlocalInds(NlocalInds),
         NgensToSendInds(NgensToSendInds), 
         NgensToMigration(NgensToMigration),
+        NgensToUpd_LHOF(NgensToUpd_LHOF),
         outputDirectory(outputDir),
         rng(std::random_device{}())   // initialize rng in constructor
         {
         }
-            
+
             
 private:
     int populationSize;
@@ -95,6 +98,7 @@ private:
     int NlocalInds;
     int NgensToSendInds;
     int NgensToMigration;
+    int NgensToUpd_LHOF;
     std::filesystem::path outputDirectory;
     std::mt19937 rng;       // each GeneticProgram has unique rng
 
@@ -132,6 +136,7 @@ private:
     std::shared_ptr<Node> GenerateRandomNode(int depth);
     void ReplaceInd(const Individual& newInd, int index);
     void SortPopulation();
+    void WriteLocalHOF(const std::filesystem::path& outputDir) const;
     Individual DeserializeGlobalEntry(const GlobalHOF::SerializedEntry& entry) const;
     std::shared_ptr<Node> ParseTreeExpression(const std::string& expression,
         size_t& pos) const;
@@ -575,8 +580,54 @@ void GeneticProgram::SortPopulation()
 }
 
 // ================================
+void GeneticProgram::WriteLocalHOF(const std::filesystem::path& outputDir) const
+{
+    const std::filesystem::path hofFilePath =
+        outputDir / ("gp_hof_" + std::to_string(rank) + ".txt");
+    std::ofstream hofFile(hofFilePath);
+    if (!hofFile)
+    {
+        throw std::runtime_error("Failed to open output file: " + hofFilePath.string());
+    }
+
+    hofFile << "=======================================\n"
+        << "Local HOF | rank: " << rank << "\n"
+        << "=======================================\n";
+
+    const size_t individualsToWrite = std::min<size_t>(10, population.size());
+    for (size_t i = 0; i < individualsToWrite; ++i)
+    {
+        const Individual& indiv = population[i];
+
+        hofFile << "==== Individual: "
+            << i + 1
+            << " ===="
+            << "\nFitness : "
+            << indiv.fitness
+            << "\n";
+
+        for (int caseInd = 0; caseInd < 4; caseInd++)
+        {
+            hofFile << "Tree: "
+                << caseInd
+                << " (Size: "
+                << indiv.trees[caseInd].Size()
+                << ")\n"
+                << indiv.trees[caseInd].convertToStr()
+                << "\n";
+        }
+        hofFile << "\n---------------------------------------\n";
+    }
+}
+
+// ================================
 void GeneticProgram::Run()
 {
+    if (NgensToUpd_LHOF <= 0)
+    {
+        throw std::invalid_argument("NgensToUpd_LHOF must be greater than zero");
+    }
+
     // create output dir (configured output dir / processID/)
     const std::filesystem::path outputDir = std::filesystem::absolute(outputDirectory) / std::to_string(rank);
     std::filesystem::create_directories(outputDir);
@@ -738,47 +789,20 @@ void GeneticProgram::Run()
                 SortPopulation();
             }
         }
+
+        // --------------------------
+        // Update the local HOF 
+        if ((generation + 1) % NgensToUpd_LHOF == 0)
+        {
+            WriteLocalHOF(outputDir);
+        }
+    }
+
+    // Take a final snapshot of local HOF in case of weird number of gens
+    if (generations % NgensToUpd_LHOF != 0)
+    {
+        WriteLocalHOF(outputDir);
     }
 
     statsFile.close();
-
-
-    // --------------------------
-    // create local hof file
-    const std::filesystem::path hofFilePath = 
-        outputDir / ("gp_hof_" + std::to_string(rank) + ".txt");
-    std::ofstream hofFile(hofFilePath);
-    if (!hofFile)
-    {
-        throw std::runtime_error("Failed to open output file: " + hofFilePath.string());
-    }
-
-    hofFile << "=======================================\n"
-        << "Local HOF | rank: " << rank << "\n"
-        << "=======================================\n";
-
-	for (int i = 0; i < 10; i++)
-	{
-		Individual indiv = population[i];
-
-		hofFile << "==== Individual: "
-			<< i + 1
-			<< " ===="
-			<<"\nFitness : "
-			<< indiv.fitness
-			<< "\n";
-
-		for (int caseInd = 0; caseInd < 4; caseInd++)
-		{
-			hofFile << "Tree: " 
-				<< caseInd 
-				<< " (Size: "
-				<< indiv.trees[caseInd].Size()
-				<< ")\n"
-                << indiv.trees[caseInd].convertToStr()
-                << "\n";
-		}
-		hofFile << "\n---------------------------------------\n";
-	}
-    hofFile.close();
 }

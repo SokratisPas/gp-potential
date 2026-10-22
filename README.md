@@ -82,5 +82,6 @@ The solver parameters are defined in [input.txt](input.txt). The settings includ
 | n_local_inds | number of individuals each island send to HoF |
 | ngens_to_send_inds | number of generations to send individuals to HoF |
 | ngens_to_migration | number of generations to perform migration |
+| NgensToUpd_LHOF | number of generations between local HoF file updates |
 | data_path |  data path |
 | output_dir | output directory (already included) |

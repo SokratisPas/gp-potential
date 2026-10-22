@@ -4,6 +4,8 @@ output/*
 .vscode/
 *.o
 *.out
-run_gp.sh
+*.sh
 plots/
 .venv/
+profile-db/
+measurements/

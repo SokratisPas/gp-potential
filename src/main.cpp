@@ -92,6 +92,7 @@ int main(int argc, char *argv[])
         config.NlocalInds,
         config.NgensToSendInds,
         config.NgensToMigration,
+        config.NgensToUpd_LHOF,
         config.outputDir
     );
 
