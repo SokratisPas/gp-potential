@@ -797,8 +797,8 @@ void GeneticProgram::Run()
 
             if (!globalHof->gatheredHof.empty())
             {
-                // chose number of migrants in [1, 5]
-                std::uniform_int_distribution<int> migrantCountDist(1, std::min(5, populationSize));
+                // chose number of migrants in [1, 3]
+                std::uniform_int_distribution<int> migrantCountDist(1, std::min(3, populationSize));
                 const int migrantCount = migrantCountDist(rng);
 
                 // distributions for random selection in globalHof and population
