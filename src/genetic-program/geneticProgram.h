@@ -42,6 +42,7 @@ public:
         int initialIndMaxDepth,
         int tournamentSize,
         double mutationProbability,
+        double tournSelProbability,
         std::pair<double, double> constRange,
         const std::vector<Snapshot>& data,
         int NdataSample,
@@ -66,6 +67,7 @@ public:
         initialIndMaxDepth(initialIndMaxDepth),
         tournamentSize(tournamentSize),
         mutationProbability(mutationProbability),
+        tournSelProbability(tournSelProbability),
         constRange(constRange),
         data(data),
         NdataSample(NdataSample),
@@ -89,6 +91,7 @@ private:
     int initialIndMaxDepth;    // depth of initial individuals
     int tournamentSize;
     double mutationProbability;
+    double tournSelProbability;
     int NdataSample;
     std::pair<double, double> constRange;
     const std::vector<Snapshot>& data;    
@@ -415,23 +418,35 @@ void GeneticProgram::EvaluatePopulation()
 // ================================
 const Individual& GeneticProgram::TournamentSelection() 
 {
-    std::uniform_int_distribution<int> dist(0, population.size() - 1);
+    // chose random contenstants indx for tourn sel
+    std::uniform_int_distribution<size_t> dist(0, population.size() - 1);
+    std::vector<size_t> contestants;
+    contestants.reserve(static_cast<size_t>(tournamentSize));
 
-    int bestIndex = dist(rng);  // first competitor
-
-    // compare with all other competitors
-    for (int i = 1; i < tournamentSize; i++)
+    for (int i = 0; i < tournamentSize; ++i)
     {
-        int candidate = dist(rng);  // choose random competitor
-        
-        // compare competitor with best competitor
-        if (population[candidate].fitness < population[bestIndex].fitness)
+        contestants.push_back(dist(rng));
+    }
+
+    std::sort(contestants.begin(), contestants.end(),
+        [this](size_t a, size_t b)
         {
-            bestIndex = candidate;
+            return population[a].fitness < population[b].fitness;
+        });
+        
+    // select fittest contestant with prob pTournament
+    for (int i = 0; i < tournamentSize - 1; ++i)
+    {
+        double pTournament = RandomDouble(0.0, 1.0);
+
+        if ( pTournament  < tournSelProbability)
+        {
+            return population[contestants[i]];
         }
     }
 
-    return population[bestIndex];
+    // if only one contestant remains send him
+    return population[contestants[tournamentSize - 1]];
 }
 
 // ================================
@@ -623,9 +638,25 @@ void GeneticProgram::WriteLocalHOF(const std::filesystem::path& outputDir) const
 // ================================
 void GeneticProgram::Run()
 {
+    if (populationSize <= 0)
+    {
+        throw std::invalid_argument("populationSize must be greater than zero");
+    }
+
     if (NgensToUpd_LHOF <= 0)
     {
         throw std::invalid_argument("NgensToUpd_LHOF must be greater than zero");
+    }
+
+    if (tournamentSize <= 0)
+    {
+        throw std::invalid_argument("tournamentSize must be greater than zero");
+    }
+
+    if (!std::isfinite(tournSelProbability) ||
+        tournSelProbability < 0.0 || tournSelProbability > 1.0)
+    {
+        throw std::invalid_argument("tournSelProbability must be between 0 and 1");
     }
 
     // create output dir (configured output dir / processID/)

@@ -73,6 +73,7 @@ The solver parameters are defined in [input.txt](input.txt). The settings includ
 | gens | number of generations each population evolves |
 | initial_ind_max_depth | initial depth of each individual (same for every island) |
 | tournament_size | size of tournament selection |
+| tournSelProbability | probability of selecting each individual in tournament selection |
 | mutation_prob | probability for mutation (crossover probability = 1 - mutation probability) |
 | const_min | minimum size for constants |
 | const_max | maximum size for constatns |

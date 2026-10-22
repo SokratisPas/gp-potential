@@ -82,6 +82,7 @@ int main(int argc, char *argv[])
         config.initialIndMaxDepth,
         config.tournamentSize,
         config.mutationProb,
+        config.tournSelProbability,
         constRange,
         reduced_data,
         config.NdataSample,

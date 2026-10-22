@@ -71,7 +71,8 @@ private:
 		const std::shared_ptr<Node>& node,
 		const std::shared_ptr<Node>& parent,
 		size_t childIndex,
-		std::vector<NodeLocation>& nodes) const;	
+		std::vector<NodeLocation>& nodes
+	) const;	
 };
 
 

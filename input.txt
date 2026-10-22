@@ -13,6 +13,9 @@ tournament_size = 3
 #mutation probability, crossover prob = 1 - mut prob
 mutation_prob = 0.2
 
+# Probability of accepting individual in tournament selection
+tournSelProbability = 0.7
+
 #constants max min values
 const_min = -10.0
 const_max = 10.0

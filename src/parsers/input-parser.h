@@ -13,6 +13,7 @@ struct GPConfig {
     int initialIndMaxDepth = 5;
     int tournamentSize = 3;
     double mutationProb = 0.2;
+    double tournSelProbability = 0.7;
     double constMin = -10.0;
     double constMax = 10.0;
     int NdataSample = 50;
@@ -106,6 +107,7 @@ GPConfig loadConfig(const std::filesystem::path& configPath)
     config.initialIndMaxDepth = parseInt(values, "initial_ind_max_depth");
     config.tournamentSize = parseInt(values, "tournament_size");
     config.mutationProb = parseDouble(values, "mutation_prob");
+    config.tournSelProbability = parseDouble(values, "tournSelProbability");
     config.constMin = parseDouble(values, "const_min");
     config.constMax = parseDouble(values, "const_max");
     config.NdataSample = parseInt(values, "ndata_sample");

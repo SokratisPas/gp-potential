@@ -17,7 +17,8 @@
 double fitnessFun_2elements(const std::array<Tree,4>& trees,
 	const std::vector<Snapshot>& data,
 	int dataSample,
-	std::mt19937& rng)
+	std::mt19937& rng
+)
 {
 	if (data.empty() || dataSample <= 0)
 		throw std::runtime_error("Error: No data provided or invalid data sample size.");
