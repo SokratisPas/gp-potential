@@ -151,6 +151,8 @@ private:
     static std::string Trim(const std::string& text);
     void performMigration();
     void sendToGlobalHOF();
+    void write_gp_statistics(const std::filesystem::path& filePath,
+        const int generation);
 };
 
 // ================================
@@ -724,6 +726,40 @@ void GeneticProgram::sendToGlobalHOF()
 }
 
 // ================================
+void GeneticProgram::write_gp_statistics(const std::filesystem::path& filePath,
+    const int generation)
+{
+    std::ofstream statsFile(filePath, std::ios::app);   // open file in append mode (file is not overwritten)
+    if (!statsFile)
+    {
+        throw std::runtime_error("Failed to open output file: " + filePath.string());
+    }
+    
+    double bestFitness = population[0].fitness; // lowest fitness
+    std::array<int, 4> maxSize = {0, 0, 0, 0};
+    std::array<int, 4> minSize = {10000, 10000, 10000, 10000};
+    
+    for (const auto& individual : population)
+    {
+        for (int caseInd = 0; caseInd < 4; caseInd++)
+        {
+            int indSize = individual.trees[caseInd].Size();
+            maxSize[caseInd] = std::max(maxSize[caseInd], indSize);
+            minSize[caseInd] = std::min(minSize[caseInd], indSize);
+        }
+    }
+    
+    statsFile << generation << ","
+        << bestFitness << ","
+        << maxSize[0] << "," << maxSize[1] << "," << maxSize[2] << "," << maxSize[3]
+        << ","
+        << minSize[0] << "," << minSize[1] << "," << minSize[2] << "," << minSize[3]
+        << "\n";
+    
+    statsFile.close();
+}
+
+// ================================
 void GeneticProgram::Run()
 {
     if (populationSize <= 0)
@@ -763,7 +799,9 @@ void GeneticProgram::Run()
 
     // create stats file (gp_statistics_processID.txt)
     const std::filesystem::path statsFilePath = 
-        outputDir / ("gp_statistics_" + std::to_string(rank) + ".txt");
+        outputDir / ("gp_statistics_" + std::to_string(rank) + ".txt");     
+        
+    // write initial things to gp_statistics
     std::ofstream statsFile(statsFilePath);
     if (!statsFile)
     {
@@ -774,6 +812,7 @@ void GeneticProgram::Run()
     << ",Max Size[0],Max Size[1],Max Size[2],Max Size[3]"
     << ",Min Size[0],Min Size[1],Min Size[2],Min Size[3]"
     << "\n";
+    statsFile.close();
 
     // Create the initial population
     InitializePopulation();
@@ -840,27 +879,7 @@ void GeneticProgram::Run()
 
         // --------------------------
         // Write statistics to local file
-        double bestFitness = population[0].fitness; // lowest fitness
-        std::array<int, 4> maxSize = {0, 0, 0, 0};
-        std::array<int, 4> minSize = {10000, 10000, 10000, 10000};
-
-        for (const auto& individual : population)
-        {
-            for (int caseInd = 0; caseInd < 4; caseInd++)
-            {
-                int indSize = individual.trees[caseInd].Size();
-                maxSize[caseInd] = std::max(maxSize[caseInd], indSize);
-                minSize[caseInd] = std::min(minSize[caseInd], indSize);
-            }
-        }
-
-        statsFile << generation << ","
-            << bestFitness << ","
-            << maxSize[0] << "," << maxSize[1] << "," << maxSize[2] << "," << maxSize[3]
-            << ","
-            << minSize[0] << "," << minSize[1] << "," << minSize[2] << "," << minSize[3]
-            << "\n";
-
+        write_gp_statistics(statsFilePath, generation);
 
         // --------------------------
         // send best individuals to global hof every NgensToSendInds
@@ -892,5 +911,4 @@ void GeneticProgram::Run()
         WriteLocalHOF(outputDir);
     }
 
-    statsFile.close();
 }
