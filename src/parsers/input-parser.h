@@ -22,6 +22,7 @@ struct GPConfig {
     int NlocalInds = 2;
     int NgensToSendInds = 10;
     int NgensToMigration = 20;
+    int Nmigrants = 2;
     int NgensToUpd_LHOF = 20;
     std::string dataPath = "src/data/W-Mo/trainset.xyz";
     std::filesystem::path outputDir = "run/output";
@@ -116,6 +117,7 @@ GPConfig loadConfig(const std::filesystem::path& configPath)
     config.NlocalInds = parseInt(values, "n_local_inds");
     config.NgensToSendInds = parseInt(values, "ngens_to_send_inds");
     config.NgensToMigration = parseInt(values, "ngens_to_migration");
+    config.Nmigrants = parseInt(values, "n_migrants");
     config.NgensToUpd_LHOF = parseInt(values, "NgensToUpd_LHOF");
     config.dataPath = requireValue(values, "data_path");
 

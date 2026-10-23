@@ -6,6 +6,7 @@
 #include <array>
 #include <vector>
 #include <algorithm>
+#include <numeric>
 #include <filesystem>
 #include <fstream>
 #include <cstring>
@@ -58,6 +59,7 @@ public:
         int NlocalInds,
         int NgensToSendInds,
         int NgensToMigration,
+        int Nmigrants,
         int NgensToUpd_LHOF,
         const std::filesystem::path& outputDir = "output"
     )
@@ -78,6 +80,7 @@ public:
         NlocalInds(NlocalInds),
         NgensToSendInds(NgensToSendInds), 
         NgensToMigration(NgensToMigration),
+        Nmigrants(Nmigrants),
         NgensToUpd_LHOF(NgensToUpd_LHOF),
         outputDirectory(outputDir),
         rng(std::random_device{}())   // initialize rng in constructor
@@ -101,6 +104,7 @@ private:
     int NlocalInds;
     int NgensToSendInds;
     int NgensToMigration;
+    int Nmigrants;
     int NgensToUpd_LHOF;
     std::filesystem::path outputDirectory;
     std::mt19937 rng;       // each GeneticProgram has unique rng
@@ -145,6 +149,8 @@ private:
         size_t& pos) const;
     std::shared_ptr<Node> ParseNode(const std::string& expression, size_t& pos) const;
     static std::string Trim(const std::string& text);
+    void performMigration();
+    void sendToGlobalHOF();
 };
 
 // ================================
@@ -432,7 +438,8 @@ const Individual& GeneticProgram::TournamentSelection()
         [this](size_t a, size_t b)
         {
             return population[a].fitness < population[b].fitness;
-        });
+        }
+    );
         
     // select fittest contestant with prob pTournament
     for (int i = 0; i < tournamentSize - 1; ++i)
@@ -591,7 +598,8 @@ void GeneticProgram::SortPopulation()
               [](const Individual& a, const Individual& b)
               {
                   return a.fitness < b.fitness;
-              });
+              }
+    );
 }
 
 // ================================
@@ -636,11 +644,101 @@ void GeneticProgram::WriteLocalHOF(const std::filesystem::path& outputDir) const
 }
 
 // ================================
+void GeneticProgram::performMigration()
+{
+    std::vector<int> individualIndices(static_cast<size_t>(populationSize));
+    std::iota(individualIndices.begin(), individualIndices.end(), 0);
+    std::shuffle(individualIndices.begin(), individualIndices.end(), rng);
+    
+    std::vector<GlobalHOF::SerializedEntry> outgoingEntries(
+        static_cast<size_t>(Nmigrants)
+    );
+    
+    for (int i = 0; i < Nmigrants; ++i)
+    {
+        const Individual& individual =
+            population[static_cast<size_t>(individualIndices[static_cast<size_t>(i)])];
+        auto& entry = outgoingEntries[static_cast<size_t>(i)];
+        entry.fitness = individual.fitness;
+        for (size_t treeIndex = 0; treeIndex < individual.trees.size(); ++treeIndex)
+        {
+            entry.trees[treeIndex] = individual.trees[treeIndex].convertToStr();
+            entry.sizes[treeIndex] = individual.trees[treeIndex].Size();
+            entry.depths[treeIndex] = individual.trees[treeIndex].Depth();
+        }
+    }
+    
+    const std::vector<char> sendBuffer =
+        GlobalHOF::SerializeLocalEntries(outgoingEntries);
+    const int sendSize = static_cast<int>(sendBuffer.size());
+    int receiveSize = 0;
+    const int nextRank = (rank + 1) % numTasks;
+    const int previousRank = (rank + numTasks - 1) % numTasks;
+    MPI_Sendrecv(
+        &sendSize, 1, MPI_INT, nextRank, 0,
+        &receiveSize, 1, MPI_INT, previousRank, 0,
+        MPI_COMM_WORLD, MPI_STATUS_IGNORE
+    );
+    
+    std::vector<char> receiveBuffer(static_cast<size_t>(receiveSize));
+    MPI_Sendrecv(
+        sendBuffer.data(), sendSize, MPI_CHAR, nextRank, 1,
+        receiveBuffer.data(), receiveSize, MPI_CHAR, previousRank, 1,
+        MPI_COMM_WORLD, MPI_STATUS_IGNORE
+    );
+    
+    const auto incomingEntries =
+        GlobalHOF::DeserializeLocalEntries(receiveBuffer, static_cast<size_t>(Nmigrants));
+    std::shuffle(individualIndices.begin(), individualIndices.end(), rng);
+    for (int i = 0; i < Nmigrants; ++i)
+    {
+        const int replaceIndex = individualIndices[static_cast<size_t>(i)];
+        population[static_cast<size_t>(replaceIndex)] =
+            DeserializeGlobalEntry(incomingEntries[static_cast<size_t>(i)]);
+    }
+    
+    SortPopulation();
+}
+
+// ================================
+void GeneticProgram::sendToGlobalHOF()
+{
+    std::vector<Individual> localHof;
+    localHof.reserve(static_cast<size_t>(NlocalInds));
+    
+    for (const auto& individual : population)
+    {
+        if (localHof.size() >= static_cast<size_t>(NlocalInds))
+            break;
+    
+        if (std::isfinite(individual.fitness))
+            localHof.push_back(individual);
+    }
+    
+    globalHof->GatherLocalHOF(
+        rank,
+        numTasks,
+        static_cast<int>(localHof.size()),
+        localHof
+    );
+}
+
+// ================================
 void GeneticProgram::Run()
 {
     if (populationSize <= 0)
     {
         throw std::invalid_argument("populationSize must be greater than zero");
+    }
+
+    if (Nmigrants <= 0 || Nmigrants > populationSize)
+    {
+        throw std::invalid_argument("Nmigrants must be between 1 and populationSize");
+    }
+
+    if (NgensToMigration <= 0)
+    {
+        throw std::invalid_argument("NgensToMigration must be greater than zero");
     }
 
     if (NgensToUpd_LHOF <= 0)
@@ -770,55 +868,14 @@ void GeneticProgram::Run()
         if (globalHof != nullptr &&
             (generation == generations - 1 || generation % NgensToSendInds == 0))
         {
-            std::vector<Individual> localHof;
-            localHof.reserve(static_cast<size_t>(NlocalInds));
-
-            for (const auto& individual : population)
-            {
-                if (localHof.size() >= static_cast<size_t>(NlocalInds))
-                    break;
-
-                if (std::isfinite(individual.fitness))
-                    localHof.push_back(individual);
-            }
-
-            globalHof->GatherLocalHOF(
-                rank,
-                numTasks,
-                static_cast<int>(localHof.size()),
-                localHof);
+            sendToGlobalHOF();
         }
 
         // --------------------------
-        // migration (every NgensToMigration steps)
-        if (globalHof != nullptr && generation > 0 && generation % NgensToMigration == 0)
+        // Send random individuals to the next rank and receive migrants from the previous rank.
+        if (generation > 0 && generation % NgensToMigration == 0)
         {
-            globalHof->BroadcastGlobalHOF(rank);
-
-            if (!globalHof->gatheredHof.empty())
-            {
-                // chose number of migrants in [1, 3]
-                std::uniform_int_distribution<int> migrantCountDist(1, std::min(3, populationSize));
-                const int migrantCount = migrantCountDist(rng);
-
-                // distributions for random selection in globalHof and population
-                std::uniform_int_distribution<size_t> globalEntryDist(0, globalHof->gatheredHof.size() - 1);
-                std::uniform_int_distribution<int> replaceDist(0, populationSize - 1);
-
-                // replace random individuals with migrants
-                for (int i = 0; i < migrantCount; ++i)
-                {
-                    const auto& entry = globalHof->gatheredHof[globalEntryDist(rng)];
-                    Individual migrant = DeserializeGlobalEntry(entry);
-                    const int replaceIndex = replaceDist(rng);
-
-                    population[replaceIndex] = migrant;
-                    population[replaceIndex].evaluated = true;
-                    population[replaceIndex].fitness = migrant.fitness;
-                }
-
-                SortPopulation();
-            }
+            performMigration();
         }
 
         // --------------------------
