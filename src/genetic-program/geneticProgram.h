@@ -808,10 +808,10 @@ void GeneticProgram::Run()
         throw std::runtime_error("Failed to open output file: " + statsFilePath.string());
     }
     statsFile << "GENERATION"
-    << ",Best fitness"
-    << ",Max Size[0],Max Size[1],Max Size[2],Max Size[3]"
-    << ",Min Size[0],Min Size[1],Min Size[2],Min Size[3]"
-    << "\n";
+        << ",Best fitness"
+        << ",Max Size[0],Max Size[1],Max Size[2],Max Size[3]"
+        << ",Min Size[0],Min Size[1],Min Size[2],Min Size[3]"
+        << "\n";
     statsFile.close();
 
     // Create the initial population
