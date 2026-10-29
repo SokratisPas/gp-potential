@@ -106,6 +106,7 @@ private:
     int NgensToMigration;
     int Nmigrants;
     int NgensToUpd_LHOF;
+    double probFitness_tourSel = 0.8;   // prob in tourn sel to rank inds besed on Fitness (Propotional Tournament)
     std::filesystem::path outputDirectory;
     std::mt19937 rng;       // each GeneticProgram has unique rng
 
@@ -146,7 +147,8 @@ private:
     void WriteLocalHOF(const std::filesystem::path& outputDir) const;
     Individual DeserializeGlobalEntry(const GlobalHOF::SerializedEntry& entry) const;
     std::shared_ptr<Node> ParseTreeExpression(const std::string& expression,
-        size_t& pos) const;
+        size_t& pos
+    ) const;
     std::shared_ptr<Node> ParseNode(const std::string& expression, size_t& pos) const;
     static std::string Trim(const std::string& text);
     void performMigration();
@@ -436,19 +438,43 @@ const Individual& GeneticProgram::TournamentSelection()
         contestants.push_back(dist(rng));
     }
 
-    std::sort(contestants.begin(), contestants.end(),
-        [this](size_t a, size_t b)
-        {
-            return population[a].fitness < population[b].fitness;
-        }
-    );
-        
+    // Proportional Tournament (rank inds based on fittnes or size
+    // with prob 'probFitness_tourSel')
+    double fitnessORsize = RandomDouble(0.0, 1.0);
+
+    if (fitnessORsize <= probFitness_tourSel)   // rank on fitness
+    {
+        std::sort(contestants.begin(), contestants.end(),
+            [this](size_t a, size_t b)
+            {
+                return population[a].fitness < population[b].fitness;
+            }
+        );           
+    }
+    else        // rank on size
+    {
+        std::sort(contestants.begin(), contestants.end(),
+            [this](size_t a, size_t b)
+            {
+                double sizeA = 0.0;
+                double sizeB = 0.0;
+
+                for (int i = 0; i < 4; ++i)
+                {
+                    sizeA += population[a].trees[i].Size();
+                    sizeB += population[b].trees[i].Size();
+                }
+                return sizeA < sizeB;
+            }
+        );  
+    }    
+    
     // select fittest contestant with prob pTournament
     for (int i = 0; i < tournamentSize - 1; ++i)
     {
         double pTournament = RandomDouble(0.0, 1.0);
 
-        if ( pTournament  < tournSelProbability)
+        if ( pTournament < tournSelProbability)
         {
             return population[contestants[i]];
         }
@@ -462,7 +488,8 @@ const Individual& GeneticProgram::TournamentSelection()
 std::pair<Individual, Individual> GeneticProgram::Crossover(
     const Individual& parent1,
     const Individual& parent2,
-    int caseInd)
+    int caseInd
+)
 {
     // clone the parents
     Individual child1 = parent1;
