@@ -41,7 +41,7 @@ ngens_to_migration = 20
 #Number of randomly selected individuals exchanged during migration
 n_migrants = 2
 
-#Generations to update local globalHoF
+#Generations to update local HoF
 NgensToUpd_LHOF = 20
 
 #data path

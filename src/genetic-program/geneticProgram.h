@@ -97,7 +97,7 @@ private:
     double tournSelProbability;
     int NdataSample;
     std::pair<double, double> constRange;
-    const std::vector<Snapshot>& data;    
+    const std::vector<Snapshot>& data;
     int rank;   // ID of each process
     int numTasks;          // total number of MPI ranks
     GlobalHOF* globalHof;   // shared global HOF container
@@ -414,7 +414,12 @@ void GeneticProgram::EvaluateIndividual(Individual& individual)
     if (individual.evaluated)   // already evaluated fitness
         return;
 
-    individual.fitness = fitnessFunction(individual.trees, data, NdataSample, rng);
+    individual.fitness = fitnessFunction(
+        individual.trees,
+        data,
+        NdataSample,
+        rng
+    );
     individual.evaluated = true;
 }
 

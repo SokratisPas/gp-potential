@@ -14,7 +14,8 @@
 // #include <omp.h>   (for OpenMP functions)
 
 // -----------------------------------------------
-double fitnessFun_2elements(const std::array<Tree,4>& trees,
+double fitnessFun_2elements(
+	const std::array<Tree,4>& trees,
 	const std::vector<Snapshot>& data,
 	int dataSample,
 	std::mt19937& rng
@@ -97,8 +98,18 @@ double fitnessFun_2elements(const std::array<Tree,4>& trees,
 	if (evaluationError)
 		std::rethrow_exception(evaluationError);
 
+	// calc size penalty
+	int totalSize = 0;
+	for (const auto& tree : trees)
+	{
+		totalSize += tree.Size();
+	}
+	double sizePenalty = totalSize * 0.1;	
+
 	// Fitness = MSE = sum[(DE ^2)/Natoms] / Nsnapshots
-	return energyLossTotal / static_cast<double>(sampleCount);
+	double fitnessTotal = energyLossTotal / static_cast<double>(sampleCount);
+
+	return fitnessTotal + sizePenalty;
 }
 
 
