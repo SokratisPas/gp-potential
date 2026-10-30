@@ -1,6 +1,6 @@
 # GP Potential
 
-A parallel genetic-programming framework for discovering symbolic interatomic potentials from simulation data.
+A parallel genetic-programming framework for discovering symbolic interatomic potentials from DFT data.
 
 ## Overview
 
@@ -22,7 +22,7 @@ The workflow is organized as follows:
 2. Construct interatomic distance features from local neighborhoods.
 3. Evaluate a population of candidate symbolic expressions against the target energy.
 4. Apply evolutionary operators such as crossover and mutation to improve candidate trees.
-5. Use migration between parallel islands and retain elite individuals in a Hall of Fame.
+5. Use migration between parallel islands and retain best individuals in a Hall of Fame.
 6. Record final results in the output directory for analysis and comparison.
 
 ## Requirements

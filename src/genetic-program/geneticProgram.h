@@ -51,8 +51,9 @@ public:
             const std::array<Tree,4>&, 
             const std::vector<Snapshot>&,
             int dataSample,
-            std::mt19937& rng)>
-            fitnessFunction,
+            std::mt19937& rng,
+            int rank
+        )> fitnessFunction,
         int rank,
         int numTasks,
         GlobalHOF* globalHof,
@@ -128,8 +129,9 @@ private:
         const std::array<Tree,4>&, 
         const std::vector<Snapshot>&,
         int dataSample,
-        std::mt19937& rng)>
-        fitnessFunction;
+        std::mt19937& rng,
+        int rank
+    )> fitnessFunction;
         
     void InitializePopulation();
     void EvaluatePopulation();
@@ -418,7 +420,8 @@ void GeneticProgram::EvaluateIndividual(Individual& individual)
         individual.trees,
         data,
         NdataSample,
-        rng
+        rng,
+        rank
     );
     individual.evaluated = true;
 }
@@ -442,38 +445,14 @@ const Individual& GeneticProgram::TournamentSelection()
     {
         contestants.push_back(dist(rng));
     }
-
-    // Proportional Tournament (rank inds based on fittnes or size
-    // with prob 'probFitness_tourSel')
-    double fitnessORsize = RandomDouble(0.0, 1.0);
-
-    if (fitnessORsize <= probFitness_tourSel)   // rank on fitness
-    {
-        std::sort(contestants.begin(), contestants.end(),
-            [this](size_t a, size_t b)
-            {
-                return population[a].fitness < population[b].fitness;
-            }
-        );           
-    }
-    else        // rank on size
-    {
-        std::sort(contestants.begin(), contestants.end(),
-            [this](size_t a, size_t b)
-            {
-                double sizeA = 0.0;
-                double sizeB = 0.0;
-
-                for (int i = 0; i < 4; ++i)
-                {
-                    sizeA += population[a].trees[i].Size();
-                    sizeB += population[b].trees[i].Size();
-                }
-                return sizeA < sizeB;
-            }
-        );  
-    }    
     
+    std::sort(contestants.begin(), contestants.end(),
+        [this](size_t a, size_t b)
+        {
+            return population[a].fitness < population[b].fitness;
+        }
+    );
+
     // select fittest contestant with prob pTournament
     for (int i = 0; i < tournamentSize - 1; ++i)
     {
