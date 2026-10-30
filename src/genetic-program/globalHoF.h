@@ -327,9 +327,11 @@ void GlobalHOF::writeGlobalHOF(int rank, const std::filesystem::path& outputDir)
 
         cntr++;
 
+
+        std::array<std::string, 4> names = {"W-W  ", "W-Mo ", "Mo-Mo", "Local"};
         for (int i = 0; i < 4; ++i)
         {
-            hofFileGlobal << i + 1 << ") " << entry.trees[i].data() << "\n";
+            hofFileGlobal << names[i] << ") " << entry.trees[i].data() << "\n";
         }
     }
 

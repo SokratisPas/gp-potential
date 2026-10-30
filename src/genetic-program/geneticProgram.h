@@ -770,22 +770,30 @@ void GeneticProgram::write_gp_statistics(const std::filesystem::path& filePath,
     double bestFitness = population[0].fitness; // lowest fitness
     std::array<int, 4> maxSize = {0, 0, 0, 0};
     std::array<int, 4> minSize = {10000, 10000, 10000, 10000};
+    std::array<int, 4> sumSize = {0, 0, 0, 0};
     
     for (const auto& individual : population)
     {
         for (int caseInd = 0; caseInd < 4; caseInd++)
         {
             int indSize = individual.trees[caseInd].Size();
+
+            sumSize[caseInd] += indSize;
+
             maxSize[caseInd] = std::max(maxSize[caseInd], indSize);
             minSize[caseInd] = std::min(minSize[caseInd], indSize);
         }
     }
-    
+
     statsFile << generation << ","
         << bestFitness << ","
         << maxSize[0] << "," << maxSize[1] << "," << maxSize[2] << "," << maxSize[3]
         << ","
         << minSize[0] << "," << minSize[1] << "," << minSize[2] << "," << minSize[3]
+        <<","
+        << sumSize[0] / static_cast<double>(populationSize) << "," << sumSize[1] / static_cast<double>(populationSize)
+        << "," 
+        << sumSize[2] / static_cast<double>(populationSize) << "," << sumSize[3] / static_cast<double>(populationSize)
         << "\n";
     
     statsFile.close();
@@ -841,8 +849,9 @@ void GeneticProgram::Run()
     }
     statsFile << "GENERATION"
         << ",Best fitness"
-        << ",Max Size[0],Max Size[1],Max Size[2],Max Size[3]"
-        << ",Min Size[0],Min Size[1],Min Size[2],Min Size[3]"
+        << ",Max_Size(W-W),Max_Size(W-Mo),Max_Size(Mo-Mo),Max_Size(Loc)"
+        << ",Min_Size(W-W),Min_Size(W-Mo),Min_Size(Mo-Mo),Min_Size(Loc)"
+        << ",MeanSize(W-W),MeanSize(W-Mo),MeanSize(Mo-Mo),MeanSize(Loc)"
         << "\n";
     statsFile.close();
 
