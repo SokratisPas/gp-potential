@@ -156,7 +156,8 @@ private:
     void performMigration();
     void sendToGlobalHOF();
     void write_gp_statistics(const std::filesystem::path& filePath,
-        const int generation);
+        const int generation
+    );
 };
 
 // ================================
@@ -764,7 +765,7 @@ void GeneticProgram::write_gp_statistics(const std::filesystem::path& filePath,
         }
     }
 
-    statsFile << generation << ","
+    statsFile << generation + 1 << ","
         << bestFitness << ","
         << maxSize[0] << "," << maxSize[1] << "," << maxSize[2] << "," << maxSize[3]
         << ","
@@ -827,9 +828,9 @@ void GeneticProgram::Run()
         throw std::runtime_error("Failed to open output file: " + statsFilePath.string());
     }
     statsFile << "GENERATION"
-        << ",Best fitness"
-        << ",Max_Size(W-W),Max_Size(W-Mo),Max_Size(Mo-Mo),Max_Size(Loc)"
-        << ",Min_Size(W-W),Min_Size(W-Mo),Min_Size(Mo-Mo),Min_Size(Loc)"
+        << ",BestFitness"
+        << ",MaxSize(W-W),MaxSize(W-Mo),MaxSize(Mo-Mo),MaxSize(Loc)"
+        << ",MinSize(W-W),MinSize(W-Mo),MinSize(Mo-Mo),MinSize(Loc)"
         << ",MeanSize(W-W),MeanSize(W-Mo),MeanSize(Mo-Mo),MeanSize(Loc)"
         << "\n";
     statsFile.close();
