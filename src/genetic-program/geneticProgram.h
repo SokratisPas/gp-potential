@@ -119,8 +119,6 @@ private:
         &Sub,
         &Mul,
         &Div,
-        &Inv6,
-        &Inv12,
         &Pow
     };
     

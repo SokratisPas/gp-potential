@@ -238,8 +238,6 @@ std::string Tree::nodeTypeToString(NodeType type) const
 	case NodeType::Sub:   return "Sub";
 	case NodeType::Mul:   return "Mul";
 	case NodeType::Div:   return "Div";
-	case NodeType::Inv6:  return "Inv6";
-	case NodeType::Inv12: return "Inv12";
 	case NodeType::Var:   return "r";
 	case NodeType::Const: return "Const";
 	case NodeType::Pow:   return "Pow";
@@ -300,7 +298,8 @@ void Tree::CollectNodes(
 	const std::shared_ptr<Node>& node,
 	const std::shared_ptr<Node>& parent,
 	size_t childIndex,
-	std::vector<NodeLocation>& nodes) const
+	std::vector<NodeLocation>& nodes
+) const
 {
 	if (!node)
 		return;

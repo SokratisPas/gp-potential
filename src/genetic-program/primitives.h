@@ -3,6 +3,7 @@
 #include <vector>
 #include <string>
 #include <functional>
+#include <limits>
 #include <cmath>
 
 
@@ -23,8 +24,6 @@ enum class NodeType {
 	Sub,
 	Div,
 	Mul,
-	Inv6,
-	Inv12,
 	Const,
 	Var,
 	Pow
@@ -67,7 +66,7 @@ Primitive Div{
 	[](const std::vector<double>& x)
 	{
 		if (std::abs(x[1]) < 1e-6)	// catch div with 0
-			return 1e6;
+			return std::numeric_limits<double>::infinity();
 		else
 			return x[0] / x[1];
 	}
@@ -82,13 +81,14 @@ Primitive Mul{
 	}
 };
 // ==================
+/*
 Primitive Inv6{
 	NodeType::Inv6,
 	1,
 	[](const std::vector<double>& x)
 	{
 		if (std::abs(x[0]) < 1e-6)
-			return 1e6;
+			return std::numeric_limits<double>::infinity();
 		else
 			return 1.0 / std::pow(x[0], 6);
 	}
@@ -100,11 +100,12 @@ Primitive Inv12{
 	[](const std::vector<double>& x)
 	{
 		if (std::abs(x[0]) < 1e-6)
-			return 1e6;
+			return std::numeric_limits<double>::infinity();
 		else
 			return 1.0 / std::pow(x[0], 12);
 	}
 };
+*/
 // ==================
 Primitive Var{
 	NodeType::Var,
@@ -124,14 +125,7 @@ Primitive Pow{
 	2,	
 	[](const std::vector<double>& x)
 	{
-		if (std::abs(x[0]) < 1e-6)
-			return 1e-6;
-		else if (std::abs(x[0] > 1e6))
-			return 1e6;
-		else
-		{
-			return std::pow(x[0], x[1]); // fix !!!
-		}
+		return std::pow(x[0], x[1]); 
 	}
 };
 
@@ -144,8 +138,6 @@ static const Primitive* PrimitiveFromName(const std::string& name)
     if (name == "Sub") return &Sub;
     if (name == "Mul") return &Mul;
     if (name == "Div") return &Div;
-    if (name == "Inv6") return &Inv6;
-    if (name == "Inv12") return &Inv12;
 	if (name == "Pow") return &Pow;
     return nullptr;
 }
