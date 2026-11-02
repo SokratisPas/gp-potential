@@ -618,7 +618,7 @@ void GeneticProgram::SortPopulation()
 void GeneticProgram::WriteLocalHOF(const std::filesystem::path& outputDir) const
 {
     const std::filesystem::path hofFilePath =
-        outputDir / ("gp_hof_" + std::to_string(rank) + ".txt");
+        outputDir / ("local_hof_" + std::to_string(rank) + ".txt");
     std::ofstream hofFile(hofFilePath);
     if (!hofFile)
     {
@@ -822,11 +822,11 @@ void GeneticProgram::Run()
     const std::filesystem::path outputDir = std::filesystem::absolute(outputDirectory) / std::to_string(rank);
     std::filesystem::create_directories(outputDir);
 
-    // create stats file (gp_statistics_processID.txt)
+    // create stats file (local_statistics_processID.txt)
     const std::filesystem::path statsFilePath = 
-        outputDir / ("gp_statistics_" + std::to_string(rank) + ".txt");     
+        outputDir / ("local_statistics_" + std::to_string(rank) + ".txt");     
         
-    // write initial things to gp_statistics
+    // write initial things to local_statistics
     std::ofstream statsFile(statsFilePath);
     if (!statsFile)
     {
