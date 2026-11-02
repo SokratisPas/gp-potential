@@ -653,6 +653,8 @@ void GeneticProgram::WriteLocalHOF(const std::filesystem::path& outputDir) const
         }
         hofFile << "\n---------------------------------------\n";
     }
+
+    hofFile.close();
 }
 
 // ================================
@@ -736,8 +738,10 @@ void GeneticProgram::sendToGlobalHOF()
 }
 
 // ================================
-void GeneticProgram::write_gp_statistics(const std::filesystem::path& filePath,
-    const int generation)
+void GeneticProgram::write_gp_statistics(
+    const std::filesystem::path& filePath,
+    const int generation
+)
 {
     std::ofstream statsFile(filePath, std::ios::app);   // open file in append mode (file is not overwritten)
     if (!statsFile)
@@ -772,6 +776,9 @@ void GeneticProgram::write_gp_statistics(const std::filesystem::path& filePath,
         << sumSize[0] / static_cast<double>(populationSize) << "," << sumSize[1] / static_cast<double>(populationSize)
         << "," 
         << sumSize[2] / static_cast<double>(populationSize) << "," << sumSize[3] / static_cast<double>(populationSize)
+        << ","
+        << population[0].trees[0].Size() << "," << population[0].trees[1].Size() << ","
+        << population[0].trees[2].Size() << "," << population[0].trees[3].Size()
         << "\n";
     
     statsFile.close();
@@ -830,6 +837,7 @@ void GeneticProgram::Run()
         << ",MaxSize(W-W),MaxSize(W-Mo),MaxSize(Mo-Mo),MaxSize(Loc)"
         << ",MinSize(W-W),MinSize(W-Mo),MinSize(Mo-Mo),MinSize(Loc)"
         << ",MeanSize(W-W),MeanSize(W-Mo),MeanSize(Mo-Mo),MeanSize(Loc)"
+        << ",BISize(W-W),BISize(W-Mo),BISize(Mo-Mo),BISize(Loc)"
         << "\n";
     statsFile.close();
 
