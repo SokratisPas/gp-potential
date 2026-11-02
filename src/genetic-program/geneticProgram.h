@@ -915,6 +915,7 @@ void GeneticProgram::Run()
             (generation == generations - 1 || generation % NgensToSendInds == 0))
         {
             sendToGlobalHOF();
+            globalHof->writeGlobalHOF(rank, outputDirectory);
         }
 
         // --------------------------
