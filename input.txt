@@ -11,7 +11,7 @@ initial_ind_max_depth = 5
 tournament_size = 3
 
 #mutation probability, crossover prob = 1 - mut prob
-mutation_prob = 0.2
+mutation_prob = 0.6
 
 #Probability of accepting individual in tournament selection
 tournSelProbability = 0.7
@@ -43,6 +43,9 @@ n_migrants = 2
 
 #Generations to update local HoF
 NgensToUpd_LHOF = 20
+
+# size penalty factor (each island has different penalty)
+sizePenaltyFactor = 0.025
 
 #data path
 data_path = src/data/W-Mo/trainset.xyz

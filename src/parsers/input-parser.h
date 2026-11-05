@@ -24,6 +24,7 @@ struct GPConfig {
     int NgensToMigration = 20;
     int Nmigrants = 2;
     int NgensToUpd_LHOF = 20;
+    double sizePenaltyFactor = 0.025;
     std::string dataPath = "src/data/W-Mo/trainset.xyz";
     std::filesystem::path outputDir = "run/output";
 };
@@ -119,6 +120,7 @@ GPConfig loadConfig(const std::filesystem::path& configPath)
     config.NgensToMigration = parseInt(values, "ngens_to_migration");
     config.Nmigrants = parseInt(values, "n_migrants");
     config.NgensToUpd_LHOF = parseInt(values, "NgensToUpd_LHOF");
+    config.sizePenaltyFactor = parseDouble(values, "sizePenaltyFactor");
     config.dataPath = requireValue(values, "data_path");
 
     if (values.count("output_dir") != 0)

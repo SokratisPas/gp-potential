@@ -52,7 +52,8 @@ public:
             const std::vector<Snapshot>&,
             int dataSample,
             std::mt19937& rng,
-            int rank
+            int rank,
+            float sizePenaltyFactor
         )> fitnessFunction,
         int rank,
         int numTasks,
@@ -62,6 +63,7 @@ public:
         int NgensToMigration,
         int Nmigrants,
         int NgensToUpd_LHOF,
+        int sizePenaltyFactor,
         const std::filesystem::path& outputDir = "output"
     )
         :
@@ -83,6 +85,7 @@ public:
         NgensToMigration(NgensToMigration),
         Nmigrants(Nmigrants),
         NgensToUpd_LHOF(NgensToUpd_LHOF),
+        sizePenaltyFactor(sizePenaltyFactor),
         outputDirectory(outputDir),
         rng(std::random_device{}())   // initialize rng in constructor
         {
@@ -107,10 +110,11 @@ private:
     int NgensToMigration;
     int Nmigrants;
     int NgensToUpd_LHOF;
-    double probFitness_tourSel = 0.8;   // prob in tourn sel to rank inds besed on Fitness (Propotional Tournament)
+    int sizePenaltyFactor;    
     std::filesystem::path outputDirectory;
     std::mt19937 rng;       // each GeneticProgram has unique rng
     const int maxDepth = 17;    // Koza (1992)
+    const int NtestInds = 5;   // number of test individuals for MutateConst, we keep the best
 
     // primitive functions (update when adding new primitives in primitives.h)
     // (also update the function "Tree::nodeTypeToString" to print the tree)
@@ -129,7 +133,8 @@ private:
         const std::vector<Snapshot>&,
         int dataSample,
         std::mt19937& rng,
-        int rank
+        int rank,
+        float sizePenaltyFactor
     )> fitnessFunction;
     
     template <typename IntType>
@@ -147,6 +152,7 @@ private:
     );
     Individual MutateSubtree(const Individual& parent, int caseInd);
     Individual MutatePoint(const Individual& parent, int caseInd);
+    Individual MutateConst(const Individual& parent, int caseInd, int NtestInds);
     std::shared_ptr<Node> GenerateRandomNode(int depth);
     void ReplaceInd(const Individual& newInd, int index);
     void SortPopulation();
@@ -426,7 +432,8 @@ void GeneticProgram::EvaluateIndividual(Individual& individual)
         data,
         NdataSample,
         rng,
-        rank
+        rank,
+        sizePenaltyFactor
     );
     individual.evaluated = true;
 }
@@ -646,6 +653,75 @@ Individual GeneticProgram::MutatePoint(const Individual& parent, int caseInd)
     }
 
     return child;
+}
+
+// ================================
+Individual GeneticProgram::MutateConst(const Individual& parent, int caseInd, int NtestInds)
+{
+    Individual bestCandidate = parent;
+    bestCandidate.trees[caseInd] = parent.trees[caseInd].Clone();
+    bestCandidate.evaluated = false;
+    bestCandidate.fitness = std::numeric_limits<double>::infinity();
+    bestCandidate.energyLoss = 0.0;
+
+    if (!bestCandidate.trees[caseInd].root)
+        return bestCandidate;
+    
+    // collect all constant nodes
+    std::vector<std::shared_ptr<Node>> constNodes;
+    const auto collected = bestCandidate.trees[caseInd].CollectNodes();
+    for (const auto& location : collected)
+    {
+        if (location.node && location.node->primitive && location.node->primitive->type == NodeType::Const)
+            constNodes.push_back(location.node);
+    }
+
+    if (constNodes.empty() || NtestInds <= 0)
+        return bestCandidate;
+
+    const int maxMutatedConstants = std::max(1, static_cast<int>(constNodes.size() / 3 + 1));
+
+    for (int test = 0; test < NtestInds; ++test)
+    {
+        Individual candidate = parent;
+        candidate.trees[caseInd] = parent.trees[caseInd].Clone();
+
+        auto candidateNodes = candidate.trees[caseInd].CollectNodes();
+        std::vector<std::shared_ptr<Node>> candidateConstNodes;
+        for (const auto& location : candidateNodes)
+        {
+            if (location.node && location.node->primitive &&
+                location.node->primitive->type == NodeType::Const)
+            {
+                candidateConstNodes.push_back(location.node);
+            }
+        }
+
+        if (candidateConstNodes.empty())
+            continue;
+
+        std::shuffle(candidateConstNodes.begin(), candidateConstNodes.end(), rng);
+
+        const int numberToMutate = RandomNumber(
+            1,
+            std::min<int>(maxMutatedConstants, static_cast<int>(candidateConstNodes.size()))
+        );
+        for (int i = 0; i < numberToMutate; ++i)
+        {
+            candidateConstNodes[i]->constant = RandomNumber(constRange.first, constRange.second);
+        }
+
+        candidate.evaluated = false;
+        candidate.fitness = std::numeric_limits<double>::infinity();
+        candidate.energyLoss = 0.0;
+
+        EvaluateIndividual(candidate);
+
+        if (!std::isfinite(bestCandidate.fitness) || candidate.fitness < bestCandidate.fitness)
+            bestCandidate = candidate;
+    }
+
+    return bestCandidate;
 }
 
 
@@ -927,11 +1003,14 @@ void GeneticProgram::Run()
 
             for (int caseInd = 0; caseInd < 4; caseInd++)
             {
-                // chose between subtree mutation and point mutation
-                if (RandomNumber(0.0, 1.0) < 0.5)
+                const double mutationType = RandomNumber(0.0, 1.0);
+
+                if (mutationType < 0.33)
                     child1 = MutatePoint(child1, caseInd);
-                else
+                else if (mutationType < 0.67)
                     child1 = MutateSubtree(child1, caseInd);
+                else
+                    child1 = MutateConst(child1, caseInd, NtestInds);
             }
 
             EvaluateIndividual(child1);

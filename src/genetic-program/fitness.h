@@ -19,7 +19,8 @@ double fitnessFun_2elements(
 	const std::vector<Snapshot>& data,
 	int dataSample,
 	std::mt19937& rng,
-	int rank
+	int rank,
+	float sizePenaltyFactor
 )
 {
 	if (data.empty() || dataSample <= 0)
@@ -70,6 +71,8 @@ double fitnessFun_2elements(
 							Vlocal = trees[0].evaluate(r);
 						else if (atom.type == "W" && neighbor.type == "Mo")
 							Vlocal = trees[1].evaluate(r);
+						else if (atom.type == "Mo" && neighbor.type == "W")
+							Vlocal = trees[1].evaluate(r);
 						else if (atom.type == "Mo" && neighbor.type == "Mo")
 							Vlocal = trees[2].evaluate(r);
 
@@ -109,7 +112,7 @@ double fitnessFun_2elements(
 	}
 
 	// each island has different size penalty	
-	double sizePenalty = totalSize * 0.02 * (rank + 1);	
+	double sizePenalty = totalSize * sizePenaltyFactor * (rank + 1);	
 
 	// Fitness = MSE = sum[(DE ^2)] / Nsnapshots
 	double fitnessTotal = energyLossTotal / static_cast<double>(sampleCount);

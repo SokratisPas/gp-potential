@@ -95,6 +95,7 @@ int main(int argc, char *argv[])
         config.NgensToMigration,
         config.Nmigrants,
         config.NgensToUpd_LHOF,
+        config.sizePenaltyFactor,
         config.outputDir
     );
 
