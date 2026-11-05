@@ -110,6 +110,7 @@ private:
     double probFitness_tourSel = 0.8;   // prob in tourn sel to rank inds besed on Fitness (Propotional Tournament)
     std::filesystem::path outputDirectory;
     std::mt19937 rng;       // each GeneticProgram has unique rng
+    const int maxDepth = 17;    // Koza (1992)
 
     // primitive functions (update when adding new primitives in primitives.h)
     // (also update the function "Tree::nodeTypeToString" to print the tree)
@@ -130,33 +131,55 @@ private:
         std::mt19937& rng,
         int rank
     )> fitnessFunction;
-        
+    
+    template <typename IntType>
+    IntType RandomNumber(IntType min, IntType max);
+    double RandomNumber(double min, double max);
+
     void InitializePopulation();
     void EvaluatePopulation();
     void EvaluateIndividual(Individual& individual);
     const Individual& TournamentSelection();
-    std::pair<Individual, Individual> Crossover(const Individual& parent1,
+    std::pair<Individual, Individual> Crossover(
+        const Individual& parent1,
         const Individual& parent2,
         int caseInd
     );
-    Individual Mutate(const Individual& parent, int caseInd);
-    double RandomDouble(double min, double max);
+    Individual MutateSubtree(const Individual& parent, int caseInd);
+    Individual MutatePoint(const Individual& parent, int caseInd);
     std::shared_ptr<Node> GenerateRandomNode(int depth);
     void ReplaceInd(const Individual& newInd, int index);
     void SortPopulation();
     void WriteLocalHOF(const std::filesystem::path& outputDir) const;
     Individual DeserializeGlobalEntry(const GlobalHOF::SerializedEntry& entry) const;
-    std::shared_ptr<Node> ParseTreeExpression(const std::string& expression,
+    std::shared_ptr<Node> ParseTreeExpression(
+        const std::string& expression,
         size_t& pos
     ) const;
     std::shared_ptr<Node> ParseNode(const std::string& expression, size_t& pos) const;
     static std::string Trim(const std::string& text);
     void performMigration();
     void sendToGlobalHOF();
-    void write_gp_statistics(const std::filesystem::path& filePath,
+    void write_gp_statistics(
+        const std::filesystem::path& filePath,
         const int generation
     );
 };
+
+// ================================
+template <typename IntType>
+IntType GeneticProgram::RandomNumber(IntType min, IntType max)
+{
+    std::uniform_int_distribution<IntType> dist(min, max);
+    return dist(rng);
+}
+
+// ================================
+double GeneticProgram::RandomNumber(double min, double max)
+{
+    std::uniform_real_distribution<double> dist(min, max);
+    return dist(rng);
+}
 
 // ================================
 std::string GeneticProgram::Trim(const std::string& text)
@@ -169,7 +192,7 @@ std::string GeneticProgram::Trim(const std::string& text)
     while (end > begin && std::isspace(static_cast<unsigned char>(text[end - 1])))
         --end;
 
-    return text.substr(begin, end - begin);
+        return text.substr(begin, end - begin);
 }
 
 // ================================
@@ -265,7 +288,10 @@ std::shared_ptr<Node> GeneticProgram::ParseNode(const std::string& expression, s
 }
 
 // ================================
-std::shared_ptr<Node> GeneticProgram::ParseTreeExpression(const std::string& expression, size_t& pos) const
+std::shared_ptr<Node> GeneticProgram::ParseTreeExpression(
+    const std::string& expression,
+    size_t& pos
+) const
 {
     pos = 0;
     const std::string trimmed = Trim(expression);
@@ -315,13 +341,10 @@ std::shared_ptr<Node> GeneticProgram::GenerateRandomNode(int depth)
 {
     auto node = std::make_shared<Node>();
 
-
     // maximum depth reached -> create terminal (var or const)
     if (depth == 0)
     {
-        std::uniform_int_distribution<int> terminalDist(0, 1);
-
-        if (terminalDist(rng) == 0)
+        if (RandomNumber(0, 1) == 0)
         {
             node->primitive = &Var;
         }
@@ -329,26 +352,17 @@ std::shared_ptr<Node> GeneticProgram::GenerateRandomNode(int depth)
         {
             node->primitive = &Const;
 
-            std::uniform_real_distribution<double> constDist(constRange.first,
-                                                            constRange.second);
-
-            node->constant = constDist(rng);
+            node->constant = RandomNumber(constRange.first, constRange.second);
         }
 
         return node;
     }
 
-
     // choose function or terminal
-    std::uniform_int_distribution<int> choice(0, 1);    // 0 -> terminal,  1 -> function
-
-
     // chose terminal
-    if (choice(rng) == 0)
+    if (RandomNumber(0, 1) == 0)
     {
-        std::uniform_int_distribution<int> terminalDist(0, 1);
-
-        if (terminalDist(rng) == 0)
+        if (RandomNumber(0, 1) == 0)
         {
             node->primitive = &Var;
         }
@@ -356,27 +370,20 @@ std::shared_ptr<Node> GeneticProgram::GenerateRandomNode(int depth)
         {
             node->primitive = &Const;
 
-            std::uniform_real_distribution<double> constDist(constRange.first,
-                                                            constRange.second);
-
-            node->constant = constDist(rng);
+            node->constant = RandomNumber(constRange.first, constRange.second);
         }
 
         return node;
     }
 
     // choose primitive function
-    std::uniform_int_distribution<int> funcDist(0, functions.size() - 1);
-
-    node->primitive = functions[funcDist(rng)];
-
+    node->primitive = functions[RandomNumber(size_t{0}, functions.size() - 1)];
 
     // create children according to arity
     for (int i = 0; i < node->primitive->arity; i++)
     {
         node->children.push_back(GenerateRandomNode(depth - 1));
     }
-
 
     return node;
 }
@@ -399,8 +406,7 @@ void GeneticProgram::InitializePopulation()
             Tree tree;
 
             // generate random node in (1, initialIndMaxDepth)
-            std::uniform_int_distribution<int> indDist(1, initialIndMaxDepth);
-            tree.root = GenerateRandomNode(indDist(rng));
+            tree.root = GenerateRandomNode(RandomNumber(1, initialIndMaxDepth));
 
             ind.trees[j] = tree;
         }
@@ -436,13 +442,12 @@ void GeneticProgram::EvaluatePopulation()
 const Individual& GeneticProgram::TournamentSelection() 
 {
     // chose random contenstants indx for tourn sel
-    std::uniform_int_distribution<size_t> dist(0, population.size() - 1);
     std::vector<size_t> contestants;
     contestants.reserve(static_cast<size_t>(tournamentSize));
 
     for (int i = 0; i < tournamentSize; ++i)
     {
-        contestants.push_back(dist(rng));
+        contestants.push_back(RandomNumber(size_t{0}, population.size() - 1));
     }
     
     std::sort(contestants.begin(), contestants.end(),
@@ -452,10 +457,10 @@ const Individual& GeneticProgram::TournamentSelection()
         }
     );
 
-    // select fittest contestant with prob pTournament
+    // select fittest contestant with prob tournSelProbability
     for (int i = 0; i < tournamentSize - 1; ++i)
     {
-        double pTournament = RandomDouble(0.0, 1.0);
+        double pTournament = RandomNumber(0.0, 1.0);
 
         if ( pTournament < tournSelProbability)
         {
@@ -491,11 +496,8 @@ std::pair<Individual, Individual> GeneticProgram::Crossover(
     
 
     // choose random crossover points
-    std::uniform_int_distribution<size_t> dist1(0, nodes1.size() - 1);
-    std::uniform_int_distribution<size_t> dist2(0, nodes2.size() - 1);
-
-    NodeLocation point1 = nodes1[dist1(rng)];
-    NodeLocation point2 = nodes2[dist2(rng)];
+    NodeLocation point1 = nodes1[RandomNumber(size_t{0}, nodes1.size() - 1)];
+    NodeLocation point2 = nodes2[RandomNumber(size_t{0}, nodes2.size() - 1)];
 
     // clone the selected subtrees
     auto subtree1 = child1.trees[caseInd].CloneNode(point1.node);
@@ -536,7 +538,7 @@ std::pair<Individual, Individual> GeneticProgram::Crossover(
 }
 
 // ================================
-Individual GeneticProgram::Mutate(const Individual& parent, int caseInd)
+Individual GeneticProgram::MutateSubtree(const Individual& parent, int caseInd)
 {
     // Clone the parent
     Individual child = parent;
@@ -546,7 +548,7 @@ Individual GeneticProgram::Mutate(const Individual& parent, int caseInd)
     // (probably solved)
     if (!child.trees[caseInd].root)
     {
-        child.trees[caseInd].root = GenerateRandomNode(3);
+        child.trees[caseInd].root = GenerateRandomNode(RandomNumber(1, 3));
         child.evaluated = false;
         child.fitness = std::numeric_limits<double>::infinity();
         child.energyLoss = 0.0;
@@ -560,11 +562,10 @@ Individual GeneticProgram::Mutate(const Individual& parent, int caseInd)
         return child;
 
     // Choose a random mutation point
-    std::uniform_int_distribution<size_t> dist(0, nodes.size() - 1);
-    NodeLocation point = nodes[dist(rng)];
+    NodeLocation point = nodes[RandomNumber(size_t{0}, nodes.size() - 1)];
 
-    // Generate a new random subtree
-    auto newSubtree = GenerateRandomNode(3);
+    // Generate a new random subtree with depth in [1, 3]
+    auto newSubtree = GenerateRandomNode(RandomNumber(1, 3));
 
     // Replace the selected subtree
     if (point.parent == nullptr)
@@ -577,6 +578,12 @@ Individual GeneticProgram::Mutate(const Individual& parent, int caseInd)
         point.parent->children[point.childIndex] = newSubtree;
     }
 
+    // Koza (1992) reject individuals with huge depth
+    if (child.trees[caseInd].Depth() > maxDepth)
+    {
+        return parent;
+    }
+
     // Reset evaluation
     child.evaluated = false;
     child.fitness = std::numeric_limits<double>::infinity();
@@ -586,11 +593,61 @@ Individual GeneticProgram::Mutate(const Individual& parent, int caseInd)
 }
 
 // ================================
-double GeneticProgram::RandomDouble(double min, double max)
+Individual GeneticProgram::MutatePoint(const Individual& parent, int caseInd)
 {
-    std::uniform_real_distribution<double> dist(min, max);
-    return dist(rng);
+    Individual child = parent;
+    child.trees[caseInd] = parent.trees[caseInd].Clone();
+
+    if (!child.trees[caseInd].root)
+        return child;
+
+    auto nodes = child.trees[caseInd].CollectNodes();
+    if (nodes.empty())
+        return child;
+
+    const auto& node = nodes[RandomNumber(size_t{0}, nodes.size() - 1)].node;
+    if (!node || !node->primitive)
+        return child;
+
+    bool mutated = false;
+    if (node->primitive->arity > 0)
+    {
+        std::vector<const Primitive*> alternatives;
+        for (const Primitive* function : functions)
+        {
+            if (function->arity == node->primitive->arity &&
+                function->type != node->primitive->type)
+            {
+                alternatives.push_back(function);
+            }
+        }
+
+        if (!alternatives.empty())
+        {
+            node->primitive = alternatives[
+                RandomNumber(size_t{0}, alternatives.size() - 1)
+            ];
+            mutated = true;
+        }
+    }
+    else if (node->primitive->type == NodeType::Const)
+    {
+        double randomConst = RandomNumber(constRange.first, constRange.second);
+        node->constant = randomConst;
+
+        mutated = true;
+    }
+
+    if (mutated)
+    {
+        child.evaluated = false;
+        child.fitness = std::numeric_limits<double>::infinity();
+        child.energyLoss = 0.0;
+    }
+
+    return child;
 }
+
 
 // ================================
 void GeneticProgram::ReplaceInd(const Individual& newInd, int index)
@@ -864,13 +921,17 @@ void GeneticProgram::Run()
         const Individual& parent1 = TournamentSelection();
         
         //          Mutation
-        if (RandomDouble(0.0, 1.0) < mutationProbability)
+        if (RandomNumber(0.0, 1.0) < mutationProbability)
         {
             Individual child1 = parent1;
 
             for (int caseInd = 0; caseInd < 4; caseInd++)
             {
-                child1 = Mutate(child1, caseInd);
+                // chose between subtree mutation and point mutation
+                if (RandomNumber(0.0, 1.0) < 0.5)
+                    child1 = MutatePoint(child1, caseInd);
+                else
+                    child1 = MutateSubtree(child1, caseInd);
             }
 
             EvaluateIndividual(child1);

@@ -28,9 +28,7 @@ public:
 struct NodeLocation
 {
 	std::shared_ptr<Node> node;
-
 	std::shared_ptr<Node> parent;
-
 	size_t childIndex;
 };
 
@@ -46,27 +44,18 @@ public:
 
 	int Size() const;	
 	int Depth() const;	
-	Tree Clone() const;
-	
-	std::vector<NodeLocation> CollectNodes() const;
-	
-	double evaluate(double r) const;
-	
+	Tree Clone() const;	
+	std::vector<NodeLocation> CollectNodes() const;	
+	double evaluate(double r) const;	
 	std::string convertToStr() const;	// return the tree as a string representation
-
-	void convertToStrPart(const std::shared_ptr<Node>& node, std::string& out) const;
-	
+	void convertToStrPart(const std::shared_ptr<Node>& node, std::string& out) const;	
 	std::shared_ptr<Node> CloneNode(const std::shared_ptr<Node>& node) const;
 
 private:
-	double evaluateNode(const std::shared_ptr<Node>& node, double r) const;
-	
+	double evaluateNode(const std::shared_ptr<Node>& node, double r) const;	
 	std::string nodeTypeToString(NodeType type) const;
-
-	int Size(const std::shared_ptr<Node>& node) const;
-	
+	int Size(const std::shared_ptr<Node>& node) const;	
 	int Depth(const std::shared_ptr<Node>& node) const;	
-	
 	void CollectNodes(
 		const std::shared_ptr<Node>& node,
 		const std::shared_ptr<Node>& parent,
