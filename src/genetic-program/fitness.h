@@ -78,11 +78,13 @@ double fitnessFun_2elements(
 					}
 				}
 
-				// we divide by number of atoms to acount for bigger snapshots
+				// divide by 2 to avoid double counting
+				EsnapshotTotal *= 0.5;
+
+				// we dont divede by Natoms, bcz energy - Natoms have a linear relationship 
 				energyLossTotal +=
 					((EsnapshotTotal - snapshot.energy) *
-					 (EsnapshotTotal - snapshot.energy))
-					/ static_cast<double>(snapshot.numberOfAtoms);
+					 (EsnapshotTotal - snapshot.energy));
 			}
 			catch (...)
 			{
@@ -109,7 +111,7 @@ double fitnessFun_2elements(
 	// each island has different size penalty	
 	double sizePenalty = totalSize * 0.02 * (rank + 1);	
 
-	// Fitness = MSE = sum[(DE ^2)/Natoms] / Nsnapshots
+	// Fitness = MSE = sum[(DE ^2)] / Nsnapshots
 	double fitnessTotal = energyLossTotal / static_cast<double>(sampleCount);
 
 	return fitnessTotal + sizePenalty;
