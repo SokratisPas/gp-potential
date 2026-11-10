@@ -846,16 +846,36 @@ void GeneticProgram::performMigration()
     const int nextRank = (rank + 1) % numTasks;
     const int previousRank = (rank + numTasks - 1) % numTasks;
     MPI_Sendrecv(
-        &sendSize, 1, MPI_INT, nextRank, 0,
-        &receiveSize, 1, MPI_INT, previousRank, 0,
-        MPI_COMM_WORLD, MPI_STATUS_IGNORE
+        &sendSize, 
+        1, 
+        MPI_INT, 
+        nextRank, 
+        0,
+        &receiveSize, 
+        1, 
+        MPI_INT, 
+        previousRank, 
+        0,
+        MPI_COMM_WORLD, 
+        MPI_STATUS_IGNORE
     );
     
     std::vector<char> receiveBuffer(static_cast<size_t>(receiveSize));
+    
+    // (to avoid deadlocks we use MPI_Sendrecv)
     MPI_Sendrecv(
-        sendBuffer.data(), sendSize, MPI_CHAR, nextRank, 1,
-        receiveBuffer.data(), receiveSize, MPI_CHAR, previousRank, 1,
-        MPI_COMM_WORLD, MPI_STATUS_IGNORE
+        sendBuffer.data(),      // send buffer
+        sendSize,               // send count
+        MPI_CHAR,               // send type
+        nextRank,               // destination rank
+        1,                      // send tag
+        receiveBuffer.data(),   // receive buffer
+        receiveSize,            // receive count
+        MPI_CHAR,               // receive type
+        previousRank,           // source rank
+        1,                      // receive tag
+        MPI_COMM_WORLD,         // communicator
+        MPI_STATUS_IGNORE       // status
     );
     
     const auto incomingEntries =
