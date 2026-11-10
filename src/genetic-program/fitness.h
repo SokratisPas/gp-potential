@@ -20,7 +20,7 @@ double fitnessFun_2elements(
 	int dataSample,
 	std::mt19937& rng,
 	int rank,
-	float sizePenaltyFactor
+	double sizePenaltyFactor
 )
 {
 	if (data.empty() || dataSample <= 0)
@@ -84,10 +84,11 @@ double fitnessFun_2elements(
 				// divide by 2 to avoid double counting
 				EsnapshotTotal *= 0.5;
 
-				// we dont divede by Natoms, bcz energy - Natoms have a linear relationship 
+				// we divede by Natoms, bcz energy - Natoms have a linear relationship 
 				energyLossTotal +=
 					((EsnapshotTotal - snapshot.energy) *
-					 (EsnapshotTotal - snapshot.energy));
+					 (EsnapshotTotal - snapshot.energy))
+					/ static_cast<double>(snapshot.numberOfAtoms);
 			}
 			catch (...)
 			{

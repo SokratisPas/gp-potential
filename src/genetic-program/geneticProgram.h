@@ -53,7 +53,7 @@ public:
             int dataSample,
             std::mt19937& rng,
             int rank,
-            float sizePenaltyFactor
+            double sizePenaltyFactor
         )> fitnessFunction,
         int rank,
         int numTasks,
@@ -63,7 +63,7 @@ public:
         int NgensToMigration,
         int Nmigrants,
         int NgensToUpd_LHOF,
-        int sizePenaltyFactor,
+        double sizePenaltyFactor,
         const std::filesystem::path& outputDir = "output"
     )
         :
@@ -110,7 +110,7 @@ private:
     int NgensToMigration;
     int Nmigrants;
     int NgensToUpd_LHOF;
-    int sizePenaltyFactor;    
+    double sizePenaltyFactor;    
     std::filesystem::path outputDirectory;
     std::mt19937 rng;       // each GeneticProgram has unique rng
     const int maxDepth = 17;    // Koza (1992)
@@ -134,7 +134,7 @@ private:
         int dataSample,
         std::mt19937& rng,
         int rank,
-        float sizePenaltyFactor
+        double sizePenaltyFactor
     )> fitnessFunction;
     
     template <typename IntType>
@@ -156,6 +156,7 @@ private:
     std::shared_ptr<Node> GenerateRandomNode(int depth);
     void ReplaceInd(const Individual& newInd, int index);
     void SortPopulation();
+    bool IsWithinMaxDepth(const Individual& individual) const;
     void WriteLocalHOF(const std::filesystem::path& outputDir) const;
     Individual DeserializeGlobalEntry(const GlobalHOF::SerializedEntry& entry) const;
     std::shared_ptr<Node> ParseTreeExpression(
@@ -411,8 +412,10 @@ void GeneticProgram::InitializePopulation()
         {
             Tree tree;
 
-            // generate random node in (1, initialIndMaxDepth)
-            tree.root = GenerateRandomNode(RandomNumber(1, initialIndMaxDepth));
+            // Generate a random tree with depth in [1, initialIndMaxDepth]
+            tree.root = GenerateRandomNode(
+                RandomNumber(1, std::min(initialIndMaxDepth, maxDepth - 1))
+            );
 
             ind.trees[j] = tree;
         }
@@ -427,6 +430,9 @@ void GeneticProgram::EvaluateIndividual(Individual& individual)
     if (individual.evaluated)   // already evaluated fitness
         return;
 
+    if (!IsWithinMaxDepth(individual))
+        throw std::runtime_error("Individual contains a tree exceeding the maximum depth.");
+
     individual.fitness = fitnessFunction(
         individual.trees,
         data,
@@ -436,6 +442,18 @@ void GeneticProgram::EvaluateIndividual(Individual& individual)
         sizePenaltyFactor
     );
     individual.evaluated = true;
+}
+
+// ================================
+bool GeneticProgram::IsWithinMaxDepth(const Individual& individual) const
+{
+    for (const auto& tree : individual.trees)
+    {
+        if (tree.Depth() > maxDepth)
+            return false;
+    }
+
+    return true;
 }
 
 // ================================
@@ -530,6 +548,12 @@ std::pair<Individual, Individual> GeneticProgram::Crossover(
     {
         point2.parent->children[point2.childIndex] = subtree1;
     }
+
+    // catch trees with large depth
+    if (child1.trees[caseInd].Depth() > maxDepth)
+        child1.trees[caseInd] = parent1.trees[caseInd].Clone();
+    if (child2.trees[caseInd].Depth() > maxDepth)
+        child2.trees[caseInd] = parent2.trees[caseInd].Clone();
 
     // mark children as not evaluated
     child1.evaluated = false;
@@ -840,8 +864,10 @@ void GeneticProgram::performMigration()
     for (int i = 0; i < Nmigrants; ++i)
     {
         const int replaceIndex = individualIndices[static_cast<size_t>(i)];
-        population[static_cast<size_t>(replaceIndex)] =
+        Individual incoming =
             DeserializeGlobalEntry(incomingEntries[static_cast<size_t>(i)]);
+        if (IsWithinMaxDepth(incoming))
+            population[static_cast<size_t>(replaceIndex)] = std::move(incoming);
     }
     
     SortPopulation();
@@ -938,6 +964,11 @@ void GeneticProgram::Run()
     if (NgensToUpd_LHOF <= 0)
     {
         throw std::invalid_argument("NgensToUpd_LHOF must be greater than zero");
+    }
+
+    if (initialIndMaxDepth <= 0)
+    {
+        throw std::invalid_argument("initialIndMaxDepth must be greater than zero");
     }
 
     if (tournamentSize <= 0)
