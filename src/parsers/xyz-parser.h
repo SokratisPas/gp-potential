@@ -180,11 +180,7 @@ Vec3 XYZParser::parseLattice(const std::string& line)
     So we only need the diagonal values.
         */
 
-    return {
-        a1,
-        b2,
-        c3
-    };
+    return { a1, b2, c3 };
 }
 
 // ------------------------------------------------
@@ -284,9 +280,7 @@ void XYZParser::buildNeighborLists(Snapshot& snapshot)
 
                 neighbor.distance = distance;
 
-                snapshot.atoms[i]
-                    .neighbors
-                    .push_back(neighbor);
+                snapshot.atoms[i].neighbors.push_back(neighbor);
             }
         }
     }

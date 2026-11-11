@@ -26,7 +26,8 @@ enum class NodeType {
 	Mul,
 	Const,
 	Var,
-	Pow
+	Pow,
+	Sum
 };
 
 // --------------------------------------------------------
@@ -130,6 +131,13 @@ Primitive Pow{
 };
 
 // ==================
+Primitive Sum{
+	NodeType::Sum,
+	1,
+	nullptr
+};
+
+// ==================
 // used in DeserializeGlobalEntry
 // update when adding new primitves !
 static const Primitive* PrimitiveFromName(const std::string& name)
@@ -139,5 +147,6 @@ static const Primitive* PrimitiveFromName(const std::string& name)
     if (name == "Mul") return &Mul;
     if (name == "Div") return &Div;
 	if (name == "Pow") return &Pow;
+    if (name == "Sum") return &Sum;
     return nullptr;
 }

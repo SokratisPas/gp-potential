@@ -16,9 +16,9 @@ public:
     struct SerializedEntry
     {
         double fitness = std::numeric_limits<double>::infinity();
-        std::array<int, 4> sizes{};
-        std::array<int, 4> depths{};
-        std::array<std::string, 4> trees{};
+        std::array<int, 3> sizes{};
+        std::array<int, 3> depths{};
+        std::array<std::string, 3> trees{};
     };
 
     std::vector<SerializedEntry> gatheredHof;  // gathered local HOFs in global hof
@@ -44,7 +44,7 @@ public:
 std::string GlobalHOF::SerializeEntry(const SerializedEntry& entry)
 {
     std::string buffer;
-    buffer.reserve(sizeof(double) + 4 * sizeof(int) + 4 * sizeof(int) + 4 * 4 * sizeof(uint32_t));
+    buffer.reserve(sizeof(double) + 3 * sizeof(int) + 3 * sizeof(int) + 3 * 4 * sizeof(uint32_t));
 
     auto appendValue = [&buffer](const auto& value)
     {
@@ -160,7 +160,7 @@ void GlobalHOF::GatherLocalHOF(
             localEntries[static_cast<size_t>(i)].fitness = ind.fitness; // save fitness
 
             // save trees, sizes, depths
-            for (int j = 0; j < 4; ++j)
+            for (size_t j = 0; j < ind.trees.size(); ++j)
             {
                 localEntries[static_cast<size_t>(i)].trees[j] = ind.trees[j].convertToStr();
                 localEntries[static_cast<size_t>(i)].sizes[j] = ind.trees[j].Size();
@@ -320,16 +320,16 @@ void GlobalHOF::writeGlobalHOF(int rank, const std::filesystem::path& outputDir)
         hofFileGlobal << "=========== " << cntr << " ===========\n"
             << "Fitness : " << entry.fitness << "\n"
             << "Size : " << entry.sizes[0] << ", " << entry.sizes[1] << ", "
-            << entry.sizes[2] << ", " << entry.sizes[3] << "\n"
+            << entry.sizes[2] << "\n"
             << "Depth : " << entry.depths[0] << ", " << entry.depths[1] << ", "
-            << entry.depths[2] << ", " << entry.depths[3] << "\n"
+            << entry.depths[2] << "\n"
             << "Potentials : \n";
 
         cntr++;
 
 
-        std::array<std::string, 4> names = {"W-W  ", "W-Mo ", "Mo-Mo", "Local"};
-        for (int i = 0; i < 4; ++i)
+        const std::array<std::string, 3> names = {"W-W  ", "W-Mo ", "Mo-Mo"};
+        for (size_t i = 0; i < entry.trees.size(); ++i)
         {
             hofFileGlobal << names[i] << ") " << entry.trees[i].data() << "\n";
         }

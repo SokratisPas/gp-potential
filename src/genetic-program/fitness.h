@@ -15,7 +15,7 @@
 
 // -----------------------------------------------
 double fitnessFun_2elements(
-	const std::array<Tree,4>& trees,
+	const std::array<Tree, 3>& trees,
 	const std::vector<Snapshot>& data,
 	int dataSample,
 	std::mt19937& rng,
@@ -63,21 +63,19 @@ double fitnessFun_2elements(
 					for (const auto& neighbor : atom.neighbors)
 					{
 						double r = neighbor.distance;
-
-						double Vlocal = 0.0;
-						double Vtotal = 0.0;
+						const std::vector<Neighbor>& neighbors = atom.neighbors;
+						double Vij = 0.0;
 
 						if (atom.type == "W" && neighbor.type == "W")
-							Vlocal = trees[0].evaluate(r);
+							Vij = trees[0].evaluate(r, neighbors);
 						else if (atom.type == "W" && neighbor.type == "Mo")
-							Vlocal = trees[1].evaluate(r);
+							Vij = trees[1].evaluate(r, neighbors);
 						else if (atom.type == "Mo" && neighbor.type == "W")
-							Vlocal = trees[1].evaluate(r);
+							Vij = trees[1].evaluate(r, neighbors);
 						else if (atom.type == "Mo" && neighbor.type == "Mo")
-							Vlocal = trees[2].evaluate(r);
+							Vij = trees[2].evaluate(r, neighbors);
 
-						Vtotal = Vlocal + trees[3].evaluate(r);
-						EsnapshotTotal += Vtotal;
+						EsnapshotTotal += Vij;
 					}
 				}
 

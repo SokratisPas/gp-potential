@@ -3,6 +3,7 @@
 #include <memory>
 
 #include "primitives.h"
+#include "../parsers/xyz-parser.h"
 
 
 // --------------------------------------------------------
@@ -47,12 +48,17 @@ public:
 	Tree Clone() const;	
 	std::vector<NodeLocation> CollectNodes() const;	
 	double evaluate(double r) const;	
+	double evaluate(double r, const std::vector<Neighbor>& neighbors) const;
 	std::string convertToStr() const;	// return the tree as a string representation
 	void convertToStrPart(const std::shared_ptr<Node>& node, std::string& out) const;	
 	std::shared_ptr<Node> CloneNode(const std::shared_ptr<Node>& node) const;
 
 private:
-	double evaluateNode(const std::shared_ptr<Node>& node, double r) const;	
+	double evaluateNode(
+		const std::shared_ptr<Node>& node,
+		double r,
+		const std::vector<Neighbor>* neighbors
+	) const;
 	std::string nodeTypeToString(NodeType type) const;
 	int Size(const std::shared_ptr<Node>& node) const;	
 	int Depth(const std::shared_ptr<Node>& node) const;	
@@ -141,7 +147,13 @@ std::vector<NodeLocation> Tree::CollectNodes() const
 // ==============================
 double Tree::evaluate(double r) const
 {
-	return evaluateNode(root, r);
+	return evaluateNode(root, r, nullptr);
+}
+
+// ==============================
+double Tree::evaluate(double r, const std::vector<Neighbor>& neighbors) const
+{
+	return evaluateNode(root, r, &neighbors);
 }
 
 // ==============================
@@ -190,7 +202,11 @@ std::string Tree::convertToStr() const
 }
 
 // ==============================
-double Tree::evaluateNode(const std::shared_ptr<Node>& node, double r) const
+double Tree::evaluateNode(
+	const std::shared_ptr<Node>& node,
+	double r,
+	const std::vector<Neighbor>* neighbors
+) const
 {
 	if (!node)
 		throw std::runtime_error("Null node.");
@@ -207,12 +223,25 @@ double Tree::evaluateNode(const std::shared_ptr<Node>& node, double r) const
 		break;
 	}
 
+	if (node->primitive->type == NodeType::Sum)
+	{
+		if (!neighbors)
+			throw std::runtime_error("Sum primitive requires neighborhood context.");
+		if (node->children.size() != 1)
+			throw std::runtime_error("Sum primitive must have exactly one child.");
+
+		double sum = 0.0;
+		for (const auto& neighbor : *neighbors)
+			sum += evaluateNode(node->children[0], neighbor.distance, neighbors);
+		return sum;
+	}
+
 	std::vector<double> childValues;
 	childValues.reserve(node->children.size());
 
 	for (const auto& child : node->children)
 	{
-		childValues.push_back(evaluateNode(child, r));
+		childValues.push_back(evaluateNode(child, r, neighbors));
 	}
 
 	return node->primitive->function(childValues);
@@ -230,6 +259,7 @@ std::string Tree::nodeTypeToString(NodeType type) const
 	case NodeType::Var:   return "r";
 	case NodeType::Const: return "Const";
 	case NodeType::Pow:   return "Pow";
+	case NodeType::Sum:   return "Sum";
 	}
 
 	return "Unknown";

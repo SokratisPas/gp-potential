@@ -16,11 +16,9 @@ enum class IndType {
 // Individual class
 class Individual {
 public:
-// each individual has 4 trees:
-// tree AA, AB, BB -> interactions between atoms A-A, A-B, B-B
-// tree General    -> general interaction term between neighbors
+// Each individual has three trees: A-A, A-B, and B-B interactions.
 	
-	std::array<Tree,4> trees;	// {treeAA, treeAB, treeBB, treeGeneral}
+	std::array<Tree, 3> trees;	// {treeAA, treeAB, treeBB}
 
 	double fitness = std::numeric_limits<double>::infinity();
 
