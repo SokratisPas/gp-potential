@@ -45,8 +45,8 @@ class XYZParser
 {
 public:
     
-    explicit XYZParser(double cutoff)
-        : cutoff(cutoff)
+    explicit XYZParser(double cutoffOut)
+        : cutoffOut(cutoffOut)
     {
     }
 
@@ -55,7 +55,7 @@ public:
 
 private:
 
-    double cutoff;
+    double cutoffOut;   // we make the neighbor list with the cutoffOut
 
     Vec3 parseLattice(const std::string& line);
     std::string parseConfigType(const std::string& line);
@@ -271,7 +271,7 @@ void XYZParser::buildNeighborLists(Snapshot& snapshot)
 
 
             // Cutoff
-            if (distance <= cutoff)
+            if (distance <= cutoffOut)
             {
                 Neighbor neighbor;
 

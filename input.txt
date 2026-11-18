@@ -26,14 +26,17 @@ ndata_sample = 50
 #sample of .xyz extented data, use less data for testing
 last_n_data = 100
 
-#cutoff radius (Angstrom)
-cutoff = 5.0
+#cutoff radius out (Angstrom)
+cutoffOut = 5.0
+
+#cutoff radius in (Angstrom)
+cutoffIn = 3.0
 
 #Number of individuals each island sends to globalHoF
 n_local_inds = 2
 
 #Generations to send individuals to globalHoF
-ngens_to_send_inds = 10
+ngens_to_send_inds = 20
 
 #Generations to perform migration
 ngens_to_migration = 20
@@ -45,7 +48,7 @@ n_migrants = 2
 NgensToUpd_LHOF = 20
 
 # size penalty factor (each island has different penalty)
-sizePenaltyFactor = 0.025
+sizePenaltyFactor = 0.015
 
 #data path
 data_path = src/data/W-Mo/trainset.xyz

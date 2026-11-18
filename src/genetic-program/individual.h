@@ -1,6 +1,5 @@
 #pragma once
 
-#include <array>
 #include "treeClass.h"
 
 
@@ -16,9 +15,11 @@ enum class IndType {
 // Individual class
 class Individual {
 public:
-// Each individual has three trees: A-A, A-B, and B-B interactions.
-	
-	std::array<Tree, 3> trees;	// {treeAA, treeAB, treeBB}
+	// when an atom is W, we use tree_W etc...
+	// so we capture the eam idea, the atomic environment depends on the atom type
+	// and Vtotal = V_W + V_Mo
+	Tree tree_W;
+	Tree tree_Mo;
 
 	double fitness = std::numeric_limits<double>::infinity();
 
@@ -37,7 +38,8 @@ public:
 // --------------------------------------------------------
 bool Individual::operator==(const Individual& other) const
 {
-	return trees == other.trees
+	return tree_W == other.tree_W
+		&& tree_Mo == other.tree_Mo
 		&& fitness == other.fitness
 		&& energyLoss == other.energyLoss
 		&& evaluated == other.evaluated;

@@ -27,7 +27,8 @@ enum class NodeType {
 	Const,
 	Var,
 	Pow,
-	Sum
+	SUM_W,
+	SUM_Mo
 };
 
 // --------------------------------------------------------
@@ -131,8 +132,15 @@ Primitive Pow{
 };
 
 // ==================
-Primitive Sum{
-	NodeType::Sum,
+Primitive SUM_W{
+	NodeType::SUM_W,
+	1,
+	nullptr
+};
+
+// ==================
+Primitive SUM_Mo{
+	NodeType::SUM_Mo,
 	1,
 	nullptr
 };
@@ -147,6 +155,7 @@ static const Primitive* PrimitiveFromName(const std::string& name)
     if (name == "Mul") return &Mul;
     if (name == "Div") return &Div;
 	if (name == "Pow") return &Pow;
-    if (name == "Sum") return &Sum;
+    if (name == "SUM_W") return &SUM_W;
+    if (name == "SUM_Mo") return &SUM_Mo;
     return nullptr;
 }

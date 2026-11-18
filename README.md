@@ -79,7 +79,8 @@ The solver parameters are defined in [input.txt](input.txt). The settings includ
 | const_max | maximum size for constatns |
 | ndata_sample | number of data to use for fitness evaluation |
 | last_n_data | using the last number of data for training |
-| cutoff | cutoff radius |
+| cutoffIn | inner cutoff radius |
+| cutoffOut | outer cutoff radius |
 | n_local_inds | number of individuals each island send to HoF |
 | ngens_to_send_inds | number of generations to send individuals to HoF |
 | ngens_to_migration | number of generations to perform migration |

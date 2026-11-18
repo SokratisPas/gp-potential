@@ -45,10 +45,15 @@ public:
         double mutationProbability,
         double tournSelProbability,
         std::pair<double, double> constRange,
+        double cutoffIn,
+        double cutoffOut,
         const std::vector<Snapshot>& data,
         int NdataSample,
         std::function<double(
-            const std::array<Tree, 3>& trees,
+            const Tree& tree_W,
+            const Tree& tree_Mo,
+            double cutoffIn,
+            double cutoffOut,
             const std::vector<Snapshot>&,
             int dataSample,
             std::mt19937& rng,
@@ -74,6 +79,8 @@ public:
         mutationProbability(mutationProbability),
         tournSelProbability(tournSelProbability),
         constRange(constRange),
+        cutoffIn(cutoffIn),
+        cutoffOut(cutoffOut),
         data(data),
         NdataSample(NdataSample),
         fitnessFunction(fitnessFunction),
@@ -101,6 +108,8 @@ private:
     double tournSelProbability;
     int NdataSample;
     std::pair<double, double> constRange;
+    double cutoffIn;
+    double cutoffOut;
     const std::vector<Snapshot>& data;
     int rank;   // ID of each process
     int numTasks;          // total number of MPI ranks
@@ -125,12 +134,16 @@ private:
         &Mul,
         &Div,
         &Pow,
-        &Sum
+        &SUM_W,
+        &SUM_Mo
     };
     
     // fitness function
     std::function<double(
-        const std::array<Tree, 3>&,
+        const Tree& tree_W,
+        const Tree& tree_Mo,
+        double cutoffIn,
+        double cutoffOut,
         const std::vector<Snapshot>&,
         int dataSample,
         std::mt19937& rng,
@@ -148,12 +161,11 @@ private:
     const Individual& TournamentSelection();
     std::pair<Individual, Individual> Crossover(
         const Individual& parent1,
-        const Individual& parent2,
-        int caseInd
+        const Individual& parent2
     );
-    Individual MutateSubtree(const Individual& parent, int caseInd);
-    Individual MutatePoint(const Individual& parent, int caseInd);
-    Individual MutateConst(const Individual& parent, int caseInd, int NtestInds);
+    Individual MutateSubtree(const Individual& parent);
+    Individual MutatePoint(const Individual& parent);
+    Individual MutateConst(const Individual& parent, int NtestInds);
     std::shared_ptr<Node> GenerateRandomNode(int depth, bool allowSum = true);
     bool HasNestedSum(const std::shared_ptr<Node>& node, bool insideSum = false) const;
     bool HasNestedSum(const Individual& individual) const;
@@ -250,7 +262,8 @@ std::shared_ptr<Node> GeneticProgram::ParseNode(const std::string& expression, s
     }
 
     size_t start = pos;
-    while (pos < expression.size() && std::isalnum(static_cast<unsigned char>(expression[pos])))
+    while (pos < expression.size() &&
+        (std::isalnum(static_cast<unsigned char>(expression[pos])) || expression[pos] == '_'))
         ++pos;
 
     const std::string funcName = expression.substr(start, pos - start);
@@ -322,26 +335,30 @@ Individual GeneticProgram::DeserializeGlobalEntry(const GlobalHOF::SerializedEnt
     individual.evaluated = true;
     individual.energyLoss = 0.0;
 
-    for (size_t j = 0; j < individual.trees.size(); ++j)
+    const auto deserializeTree = [this](const std::string& serializedTree)
     {
-        std::string treeText = Trim(entry.trees[j].data());
+        const std::string treeText = Trim(serializedTree);
         if (treeText.empty())
         {
-            individual.trees[j].root = std::make_shared<Node>();
-            individual.trees[j].root->primitive = &Const;
-            individual.trees[j].root->constant = 0.0;
-            continue;
+            auto root = std::make_shared<Node>();
+            root->primitive = &Const;
+            root->constant = 0.0;
+            return root;
         }
 
         size_t pos = 0;
-        individual.trees[j].root = ParseTreeExpression(treeText, pos);
-        if (!individual.trees[j].root)
+        auto root = ParseTreeExpression(treeText, pos);
+        if (!root)
         {
-            individual.trees[j].root = std::make_shared<Node>();
-            individual.trees[j].root->primitive = &Const;
-            individual.trees[j].root->constant = 0.0;
+            root = std::make_shared<Node>();
+            root->primitive = &Const;
+            root->constant = 0.0;
         }
-    }
+        return root;
+    };
+
+    individual.tree_W.root = deserializeTree(entry.tree_W);
+    individual.tree_Mo.root = deserializeTree(entry.tree_Mo);
 
     return individual;
 }
@@ -368,9 +385,8 @@ std::shared_ptr<Node> GeneticProgram::GenerateRandomNode(int depth, bool allowSu
         return node;
     }
 
-    // choose function or terminal
-    // chose terminal
-    if (RandomNumber(0, 1) == 0)
+    // Choose a terminal early 30% of the time else choose a function.
+    if (RandomNumber(0.0, 1.0) < 0.3)
     {
         if (RandomNumber(0, 1) == 0)
         {
@@ -390,7 +406,10 @@ std::shared_ptr<Node> GeneticProgram::GenerateRandomNode(int depth, bool allowSu
     std::vector<const Primitive*> availableFunctions;
     for (const Primitive* function : functions)
     {
-        if (allowSum || function->type != NodeType::Sum)
+        const bool isSum =
+            function->type == NodeType::SUM_W ||
+            function->type == NodeType::SUM_Mo;
+        if (allowSum || !isSum)
             availableFunctions.push_back(function);
     }
 
@@ -399,10 +418,12 @@ std::shared_ptr<Node> GeneticProgram::GenerateRandomNode(int depth, bool allowSu
     ];
 
     // create children according to arity
+    const bool isSumNode =
+        node->primitive->type == NodeType::SUM_W ||
+        node->primitive->type == NodeType::SUM_Mo;
     for (int i = 0; i < node->primitive->arity; i++)
     {
-        const bool allowChildSum =
-            allowSum && node->primitive->type != NodeType::Sum;
+        const bool allowChildSum = allowSum && !isSumNode;
         node->children.push_back(GenerateRandomNode(depth - 1, allowChildSum));
     }
 
@@ -418,7 +439,9 @@ bool GeneticProgram::HasNestedSum(
     if (!node || !node->primitive)
         return false;
 
-    const bool isSum = node->primitive->type == NodeType::Sum;
+    const bool isSum =
+        node->primitive->type == NodeType::SUM_W ||
+        node->primitive->type == NodeType::SUM_Mo;
     if (insideSum && isSum)
         return true;
 
@@ -434,13 +457,8 @@ bool GeneticProgram::HasNestedSum(
 // ================================
 bool GeneticProgram::HasNestedSum(const Individual& individual) const
 {
-    for (const auto& tree : individual.trees)
-    {
-        if (HasNestedSum(tree.root))
-            return true;
-    }
-
-    return false;
+    return HasNestedSum(individual.tree_W.root) ||
+        HasNestedSum(individual.tree_Mo.root);
 }
 
 // ================================
@@ -455,18 +473,12 @@ void GeneticProgram::InitializePopulation()
     {
         Individual ind;
 
-        // generate random individual with three pair-potential trees
-        for (size_t j = 0; j < ind.trees.size(); ++j)
-        {
-            Tree tree;
-
-            // Generate a random tree with depth in [1, initialIndMaxDepth]
-            tree.root = GenerateRandomNode(
-                RandomNumber(1, std::min(initialIndMaxDepth, maxDepth - 1))
-            );
-
-            ind.trees[j] = tree;
-        }
+        ind.tree_W.root = GenerateRandomNode(
+            RandomNumber(1, std::min(initialIndMaxDepth, maxDepth - 1))
+        );
+        ind.tree_Mo.root = GenerateRandomNode(
+            RandomNumber(1, std::min(initialIndMaxDepth, maxDepth - 1))
+        );
 
         population.push_back(ind);
     }
@@ -484,7 +496,10 @@ void GeneticProgram::EvaluateIndividual(Individual& individual)
         throw std::runtime_error("Individual contains nested Sum primitives.");
 
     individual.fitness = fitnessFunction(
-        individual.trees,
+        individual.tree_W,
+        individual.tree_Mo,
+        cutoffIn,
+        cutoffOut,
         data,
         NdataSample,
         rng,
@@ -497,13 +512,8 @@ void GeneticProgram::EvaluateIndividual(Individual& individual)
 // ================================
 bool GeneticProgram::IsWithinMaxDepth(const Individual& individual) const
 {
-    for (const auto& tree : individual.trees)
-    {
-        if (tree.Depth() > maxDepth)
-            return false;
-    }
-
-    return true;
+    return individual.tree_W.Depth() <= maxDepth &&
+        individual.tree_Mo.Depth() <= maxDepth;
 }
 
 // ================================
@@ -550,64 +560,52 @@ const Individual& GeneticProgram::TournamentSelection()
 // ================================
 std::pair<Individual, Individual> GeneticProgram::Crossover(
     const Individual& parent1,
-    const Individual& parent2,
-    int caseInd
+    const Individual& parent2
 )
 {
-    // clone the parents
     Individual child1 = parent1;
     Individual child2 = parent2;
 
-    child1.trees[caseInd] = parent1.trees[caseInd].Clone();
-    child2.trees[caseInd] = parent2.trees[caseInd].Clone();
+    const std::array<Tree Individual::*, 2> trees = {
+        &Individual::tree_W,
+        &Individual::tree_Mo
+    };
 
-    // collect all the nodes
-    auto nodes1 = child1.trees[caseInd].CollectNodes();
-    auto nodes2 = child2.trees[caseInd].CollectNodes();
-
-    // catch empty nodes
-    if (nodes1.empty() || nodes2.empty())
-        return { child1, child2 };
-    
-
-    // choose random crossover points
-    NodeLocation point1 = nodes1[RandomNumber(size_t{0}, nodes1.size() - 1)];
-    NodeLocation point2 = nodes2[RandomNumber(size_t{0}, nodes2.size() - 1)];
-
-    // clone the selected subtrees
-    auto subtree1 = child1.trees[caseInd].CloneNode(point1.node);
-    auto subtree2 = child2.trees[caseInd].CloneNode(point2.node);
-
-    // replace subtrees for children
-    // 
-    // child 1
-    if (point1.parent == nullptr)   // we chose the root
+    for (Tree Individual::*treeMember : trees)
     {
-        child1.trees[caseInd].root = subtree2;
-    }
-    else                            // we chose some other node
-    {
-        point1.parent->children[point1.childIndex] = subtree2;
-    }
-    // child 2
-    if (point2.parent == nullptr)
-    {
-        child2.trees[caseInd].root = subtree1;
-    }
-    else
-    {
-        point2.parent->children[point2.childIndex] = subtree1;
-    }
+        Tree& child1Tree = child1.*treeMember;
+        Tree& child2Tree = child2.*treeMember;
+        const Tree& parent1Tree = parent1.*treeMember;
+        const Tree& parent2Tree = parent2.*treeMember;
 
-    // catch trees with large depth
-    if (child1.trees[caseInd].Depth() > maxDepth)
-        child1.trees[caseInd] = parent1.trees[caseInd].Clone();
-    if (child2.trees[caseInd].Depth() > maxDepth)
-        child2.trees[caseInd] = parent2.trees[caseInd].Clone();
-    if (HasNestedSum(child1.trees[caseInd].root))
-        child1.trees[caseInd] = parent1.trees[caseInd].Clone();
-    if (HasNestedSum(child2.trees[caseInd].root))
-        child2.trees[caseInd] = parent2.trees[caseInd].Clone();
+        child1Tree = parent1Tree.Clone();
+        child2Tree = parent2Tree.Clone();
+
+        auto nodes1 = child1Tree.CollectNodes();
+        auto nodes2 = child2Tree.CollectNodes();
+        if (nodes1.empty() || nodes2.empty())
+            continue;
+
+        NodeLocation point1 = nodes1[RandomNumber(size_t{0}, nodes1.size() - 1)];
+        NodeLocation point2 = nodes2[RandomNumber(size_t{0}, nodes2.size() - 1)];
+        auto subtree1 = child1Tree.CloneNode(point1.node);
+        auto subtree2 = child2Tree.CloneNode(point2.node);
+
+        if (point1.parent == nullptr)
+            child1Tree.root = subtree2;
+        else
+            point1.parent->children[point1.childIndex] = subtree2;
+
+        if (point2.parent == nullptr)
+            child2Tree.root = subtree1;
+        else
+            point2.parent->children[point2.childIndex] = subtree1;
+
+        if (child1Tree.Depth() > maxDepth || HasNestedSum(child1Tree.root))
+            child1Tree = parent1Tree.Clone();
+        if (child2Tree.Depth() > maxDepth || HasNestedSum(child2Tree.root))
+            child2Tree = parent2Tree.Clone();
+    }
 
     // mark children as not evaluated
     child1.evaluated = false;
@@ -623,55 +621,42 @@ std::pair<Individual, Individual> GeneticProgram::Crossover(
 }
 
 // ================================
-Individual GeneticProgram::MutateSubtree(const Individual& parent, int caseInd)
+Individual GeneticProgram::MutateSubtree(const Individual& parent)
 {
-    // Clone the parent
     Individual child = parent;
-    child.trees[caseInd] = parent.trees[caseInd].Clone();
+    const std::array<Tree Individual::*, 2> trees = {
+        &Individual::tree_W,
+        &Individual::tree_Mo
+    };
 
-    // Guard against empty/default trees that can exist before a real parent is assigned.
-    // (probably solved)
-    if (!child.trees[caseInd].root)
+    for (Tree Individual::*treeMember : trees)
     {
-        child.trees[caseInd].root = GenerateRandomNode(RandomNumber(1, 3));
-        child.evaluated = false;
-        child.fitness = std::numeric_limits<double>::infinity();
-        child.energyLoss = 0.0;
-        return child;
+        Tree& childTree = child.*treeMember;
+        const Tree& parentTree = parent.*treeMember;
+        childTree = parentTree.Clone();
+
+        if (!childTree.root)
+        {
+            childTree.root = GenerateRandomNode(RandomNumber(1, 3));
+            continue;
+        }
+
+        auto nodes = childTree.CollectNodes();
+        if (nodes.empty())
+            return parent;
+
+        NodeLocation point = nodes[RandomNumber(size_t{0}, nodes.size() - 1)];
+        auto newSubtree = GenerateRandomNode(RandomNumber(1, 3));
+
+        if (point.parent == nullptr)
+            childTree.root = newSubtree;
+        else
+            point.parent->children[point.childIndex] = newSubtree;
+
+        if (childTree.Depth() > maxDepth || HasNestedSum(childTree.root))
+            return parent;
     }
 
-    // Collect all nodes
-    auto nodes = child.trees[caseInd].CollectNodes();
-
-    if (nodes.empty())
-        return child;
-
-    // Choose a random mutation point
-    NodeLocation point = nodes[RandomNumber(size_t{0}, nodes.size() - 1)];
-
-    // Generate a new random subtree with depth in [1, 3]
-    auto newSubtree = GenerateRandomNode(RandomNumber(1, 3));
-
-    // Replace the selected subtree
-    if (point.parent == nullptr)
-    {
-        // Mutating the root
-        child.trees[caseInd].root = newSubtree;
-    }
-    else
-    {
-        point.parent->children[point.childIndex] = newSubtree;
-    }
-
-    // Koza (1992) reject individuals with huge depth
-    // also catch nested Sums
-    if (child.trees[caseInd].Depth() > maxDepth ||
-        HasNestedSum(child.trees[caseInd].root))
-    {
-        return parent;
-    }
-
-    // Reset evaluation
     child.evaluated = false;
     child.fitness = std::numeric_limits<double>::infinity();
     child.energyLoss = 0.0;
@@ -680,118 +665,139 @@ Individual GeneticProgram::MutateSubtree(const Individual& parent, int caseInd)
 }
 
 // ================================
-Individual GeneticProgram::MutatePoint(const Individual& parent, int caseInd)
+Individual GeneticProgram::MutatePoint(const Individual& parent)
 {
     Individual child = parent;
-    child.trees[caseInd] = parent.trees[caseInd].Clone();
-
-    if (!child.trees[caseInd].root)
-        return child;
-
-    auto nodes = child.trees[caseInd].CollectNodes();
-    if (nodes.empty())
-        return child;
-
-    const auto& node = nodes[RandomNumber(size_t{0}, nodes.size() - 1)].node;
-    if (!node || !node->primitive)
-        return child;
+    child.tree_W = parent.tree_W.Clone();
+    child.tree_Mo = parent.tree_Mo.Clone();
 
     bool mutated = false;
-    if (node->primitive->arity > 0)
+    for (Tree Individual::*treeMember : {
+        &Individual::tree_W,
+        &Individual::tree_Mo
+    })
     {
-        std::vector<const Primitive*> alternatives;
-        for (const Primitive* function : functions)
+        Tree& childTree = child.*treeMember;
+        if (!childTree.root)
+            continue;
+
+        auto nodes = childTree.CollectNodes();
+        if (nodes.empty())
+            continue;
+
+        const auto& node = nodes[RandomNumber(size_t{0}, nodes.size() - 1)].node;
+        if (!node || !node->primitive)
+            continue;
+
+        if (node->primitive->arity > 0)
         {
-            if (function->arity == node->primitive->arity &&
-                function->type != node->primitive->type)
+            std::vector<const Primitive*> alternatives;
+            for (const Primitive* function : functions)
             {
-                alternatives.push_back(function);
+                if (function->arity == node->primitive->arity &&
+                    function->type != node->primitive->type)
+                {
+                    alternatives.push_back(function);
+                }
+            }
+
+            if (!alternatives.empty())
+            {
+                node->primitive = alternatives[
+                    RandomNumber(size_t{0}, alternatives.size() - 1)
+                ];
+                mutated = true;
             }
         }
-
-        if (!alternatives.empty())
+        else if (node->primitive->type == NodeType::Const ||
+            node->primitive->type == NodeType::Var)
         {
-            node->primitive = alternatives[
-                RandomNumber(size_t{0}, alternatives.size() - 1)
-            ];
+            node->primitive = &Const;
+            node->constant = RandomNumber(constRange.first, constRange.second);
             mutated = true;
         }
-    }
-    else if (node->primitive->type == NodeType::Const)
-    {
-        double randomConst = RandomNumber(constRange.first, constRange.second);
-        node->constant = randomConst;
-
-        mutated = true;
     }
 
     if (mutated)
     {
-        if (HasNestedSum(child.trees[caseInd].root))
+        if (HasNestedSum(child))
             return parent;
 
         child.evaluated = false;
         child.fitness = std::numeric_limits<double>::infinity();
         child.energyLoss = 0.0;
     }
-
     return child;
 }
 
 // ================================
-Individual GeneticProgram::MutateConst(const Individual& parent, int caseInd, int NtestInds)
+Individual GeneticProgram::MutateConst(const Individual& parent, int NtestInds)
 {
-    Individual bestCandidate = parent;
-    bestCandidate.trees[caseInd] = parent.trees[caseInd].Clone();
-    bestCandidate.evaluated = false;
-    bestCandidate.fitness = std::numeric_limits<double>::infinity();
-    bestCandidate.energyLoss = 0.0;
+    if (NtestInds <= 0)
+        return parent;
 
-    if (!bestCandidate.trees[caseInd].root)
-        return bestCandidate;
-    
-    // collect all constant nodes
-    std::vector<std::shared_ptr<Node>> constNodes;
-    const auto collected = bestCandidate.trees[caseInd].CollectNodes();
-    for (const auto& location : collected)
+    const std::array<Tree Individual::*, 2> trees = {
+        &Individual::tree_W,
+        &Individual::tree_Mo
+    };
+
+    bool hasConstants = false;
+    for (Tree Individual::*treeMember : trees)
     {
-        if (location.node && location.node->primitive && location.node->primitive->type == NodeType::Const)
-            constNodes.push_back(location.node);
-    }
-
-    if (constNodes.empty() || NtestInds <= 0)
-        return bestCandidate;
-
-    const int maxMutatedConstants = std::max(1, static_cast<int>(constNodes.size() / 3 + 1));
-
-    for (int test = 0; test < NtestInds; ++test)
-    {
-        Individual candidate = parent;
-        candidate.trees[caseInd] = parent.trees[caseInd].Clone();
-
-        auto candidateNodes = candidate.trees[caseInd].CollectNodes();
-        std::vector<std::shared_ptr<Node>> candidateConstNodes;
-        for (const auto& location : candidateNodes)
+        const Tree& tree = parent.*treeMember;
+        for (const auto& location : tree.CollectNodes())
         {
             if (location.node && location.node->primitive &&
                 location.node->primitive->type == NodeType::Const)
             {
-                candidateConstNodes.push_back(location.node);
+                hasConstants = true;
+                break;
             }
         }
+    }
 
-        if (candidateConstNodes.empty())
-            continue;
+    if (!hasConstants)
+        return parent;
 
-        std::shuffle(candidateConstNodes.begin(), candidateConstNodes.end(), rng);
+    Individual bestCandidate = parent;
+    bestCandidate.evaluated = false;
+    bestCandidate.fitness = std::numeric_limits<double>::infinity();
+    bestCandidate.energyLoss = 0.0;
 
-        const int numberToMutate = RandomNumber(
-            1,
-            std::min<int>(maxMutatedConstants, static_cast<int>(candidateConstNodes.size()))
-        );
-        for (int i = 0; i < numberToMutate; ++i)
+    for (int test = 0; test < NtestInds; ++test)
+    {
+        Individual candidate = parent;
+        candidate.tree_W = parent.tree_W.Clone();
+        candidate.tree_Mo = parent.tree_Mo.Clone();
+
+        for (Tree Individual::*treeMember : trees)
         {
-            candidateConstNodes[i]->constant = RandomNumber(constRange.first, constRange.second);
+            Tree& tree = candidate.*treeMember;
+            std::vector<std::shared_ptr<Node>> constantNodes;
+            for (const auto& location : tree.CollectNodes())
+            {
+                if (location.node && location.node->primitive &&
+                    location.node->primitive->type == NodeType::Const)
+                {
+                    constantNodes.push_back(location.node);
+                }
+            }
+
+            if (constantNodes.empty())
+                continue;
+
+            std::shuffle(constantNodes.begin(), constantNodes.end(), rng);
+
+            const int maxMutatedConstants = std::max(
+                1,
+                static_cast<int>(constantNodes.size() / 3 + 1)
+            );
+            const int numberToMutate = RandomNumber(
+                1,
+                std::min<int>(maxMutatedConstants, static_cast<int>(constantNodes.size()))
+            );
+            for (int i = 0; i < numberToMutate; ++i)
+                constantNodes[i]->constant = RandomNumber(constRange.first, constRange.second);
         }
 
         candidate.evaluated = false;
@@ -845,29 +851,42 @@ void GeneticProgram::WriteLocalHOF(const std::filesystem::path& outputDir) const
         << "Local HOF | rank: " << rank << "\n"
         << "=======================================\n";
 
-    const size_t individualsToWrite = std::min<size_t>(10, population.size());
-    for (size_t i = 0; i < individualsToWrite; ++i)
+    constexpr size_t maxIndividualsToWrite = 10;
+    std::vector<const Individual*> writtenIndividuals;
+    writtenIndividuals.reserve(std::min(maxIndividualsToWrite, population.size()));
+
+    size_t writtenCount = 0;
+    for (const Individual& indiv : population)
     {
-        const Individual& indiv = population[i];
+        const bool alreadyWritten = std::any_of(
+            writtenIndividuals.begin(),
+            writtenIndividuals.end(),
+            [&indiv](const Individual* written)
+            {
+                return written->tree_W == indiv.tree_W &&
+                    written->tree_Mo == indiv.tree_Mo;
+            }
+        );
+        if (alreadyWritten)
+            continue;
+
+        writtenIndividuals.push_back(&indiv);
 
         hofFile << "==== Individual: "
-            << i + 1
+            << writtenCount + 1
             << " ===="
             << "\nFitness : "
             << indiv.fitness
             << "\n";
 
-        for (int caseInd = 0; caseInd < static_cast<int>(indiv.trees.size()); caseInd++)
-        {
-            hofFile << "Tree: "
-                << caseInd
-                << " (Size: "
-                << indiv.trees[caseInd].Size()
-                << ")\n"
-                << indiv.trees[caseInd].convertToStr()
-                << "\n";
-        }
+        hofFile << "Tree_W (Size: " << indiv.tree_W.Size() << ")\n"
+            << indiv.tree_W.convertToStr() << "\n"
+            << "Tree_Mo (Size: " << indiv.tree_Mo.Size() << ")\n"
+            << indiv.tree_Mo.convertToStr() << "\n";
         hofFile << "\n---------------------------------------\n";
+
+        if (++writtenCount == maxIndividualsToWrite)
+            break;
     }
 
     hofFile.close();
@@ -890,12 +909,12 @@ void GeneticProgram::performMigration()
             population[static_cast<size_t>(individualIndices[static_cast<size_t>(i)])];
         auto& entry = outgoingEntries[static_cast<size_t>(i)];
         entry.fitness = individual.fitness;
-        for (size_t treeIndex = 0; treeIndex < individual.trees.size(); ++treeIndex)
-        {
-            entry.trees[treeIndex] = individual.trees[treeIndex].convertToStr();
-            entry.sizes[treeIndex] = individual.trees[treeIndex].Size();
-            entry.depths[treeIndex] = individual.trees[treeIndex].Depth();
-        }
+        entry.tree_W = individual.tree_W.convertToStr();
+        entry.tree_Mo = individual.tree_Mo.convertToStr();
+        entry.size_W = individual.tree_W.Size();
+        entry.size_Mo = individual.tree_Mo.Size();
+        entry.depth_W = individual.tree_W.Depth();
+        entry.depth_Mo = individual.tree_Mo.Depth();
     }
     
     const std::vector<char> sendBuffer =
@@ -988,34 +1007,37 @@ void GeneticProgram::write_gp_statistics(
     }
     
     double bestFitness = population[0].fitness; // lowest fitness
-    std::array<int, 3> maxSize = {0, 0, 0};
-    std::array<int, 3> minSize = {10000, 10000, 10000};
-    std::array<int, 3> sumSize = {0, 0, 0};
+    std::array<int, 2> maxSize = {0, 0};
+    std::array<int, 2> minSize = {
+        std::numeric_limits<int>::max(),
+        std::numeric_limits<int>::max()
+    };
+    std::array<double, 2> sumSize = {0.0, 0.0};
     
     for (const auto& individual : population)
     {
-        for (size_t caseInd = 0; caseInd < individual.trees.size(); ++caseInd)
+        const std::array<int, 2> indSize = {
+            individual.tree_W.Size(),
+            individual.tree_Mo.Size()
+        };
+        for (size_t treeIndex = 0; treeIndex < indSize.size(); ++treeIndex)
         {
-            int indSize = individual.trees[caseInd].Size();
-
-            sumSize[caseInd] += indSize;
-
-            maxSize[caseInd] = std::max(maxSize[caseInd], indSize);
-            minSize[caseInd] = std::min(minSize[caseInd], indSize);
+            sumSize[treeIndex] += indSize[treeIndex];
+            maxSize[treeIndex] = std::max(maxSize[treeIndex], indSize[treeIndex]);
+            minSize[treeIndex] = std::min(minSize[treeIndex], indSize[treeIndex]);
         }
     }
 
     statsFile << generation + 1 << ","
         << bestFitness << ","
-        << maxSize[0] << "," << maxSize[1] << "," << maxSize[2]
-        << ","
-        << minSize[0] << "," << minSize[1] << "," << minSize[2]
-        <<","
-        << sumSize[0] / static_cast<double>(populationSize) << "," << sumSize[1] / static_cast<double>(populationSize)
-        << "," << sumSize[2] / static_cast<double>(populationSize)
-        << ","
-        << population[0].trees[0].Size() << "," << population[0].trees[1].Size() << ","
-        << population[0].trees[2].Size()
+        << maxSize[0] << ","
+        << minSize[0] << ","
+        << sumSize[0] / static_cast<double>(population.size()) << ","
+        << population[0].tree_W.Size() << ","
+        << maxSize[1] << ","
+        << minSize[1] << ","
+        << sumSize[1] / static_cast<double>(population.size()) << ","
+        << population[0].tree_Mo.Size()
         << "\n";
     
     statsFile.close();
@@ -1076,10 +1098,14 @@ void GeneticProgram::Run()
     }
     statsFile << "GENERATION"
         << ",BestFitness"
-        << ",MaxSize(W-W),MaxSize(W-Mo),MaxSize(Mo-Mo)"
-        << ",MinSize(W-W),MinSize(W-Mo),MinSize(Mo-Mo)"
-        << ",MeanSize(W-W),MeanSize(W-Mo),MeanSize(Mo-Mo)"
-        << ",BISize(W-W),BISize(W-Mo),BISize(Mo-Mo)"
+        << ",MaxSize_W"
+        << ",MinSize_W"
+        << ",MeanSize_W"
+        << ",BISize_W"
+        << ",MaxSize_Mo"
+        << ",MinSize_Mo"
+        << ",MeanSize_Mo"
+        << ",BISize_Mo"
         << "\n";
     statsFile.close();
 
@@ -1110,17 +1136,13 @@ void GeneticProgram::Run()
         {
             Individual child1 = parent1;
 
-            for (int caseInd = 0; caseInd < static_cast<int>(child1.trees.size()); caseInd++)
-            {
-                const double mutationType = RandomNumber(0.0, 1.0);
-
-                if (mutationType < 0.33)
-                    child1 = MutatePoint(child1, caseInd);
-                else if (mutationType < 0.67)
-                    child1 = MutateSubtree(child1, caseInd);
-                else
-                    child1 = MutateConst(child1, caseInd, NtestInds);
-            }
+            const double mutationType = RandomNumber(0.0, 1.0);
+            if (mutationType < 0.33)
+                child1 = MutatePoint(child1);
+            else if (mutationType < 0.67)
+                child1 = MutateSubtree(child1);
+            else
+                child1 = MutateConst(child1, NtestInds);
 
             EvaluateIndividual(child1);
             ReplaceInd(child1, worstIndices[0]);
@@ -1132,11 +1154,7 @@ void GeneticProgram::Run()
             const Individual& parent2 = TournamentSelection();
             std::pair<Individual, Individual> children{ parent1, parent2 };
             
-            // crossover all three pair-potential trees
-            for (int caseInd = 0; caseInd < static_cast<int>(children.first.trees.size()); caseInd++)
-            {
-                children = Crossover(children.first, children.second, caseInd);
-            }
+            children = Crossover(children.first, children.second);
 
             EvaluateIndividual(children.first);
             EvaluateIndividual(children.second);

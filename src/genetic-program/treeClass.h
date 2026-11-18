@@ -48,16 +48,23 @@ public:
 	Tree Clone() const;	
 	std::vector<NodeLocation> CollectNodes() const;	
 	double evaluate(double r) const;	
-	double evaluate(double r, const std::vector<Neighbor>& neighbors) const;
+	double evaluate(
+		double r,
+		const std::vector<Neighbor>& neighbors,
+		double r_in,
+		double r_out
+	) const;
 	std::string convertToStr() const;	// return the tree as a string representation
 	void convertToStrPart(const std::shared_ptr<Node>& node, std::string& out) const;	
 	std::shared_ptr<Node> CloneNode(const std::shared_ptr<Node>& node) const;
 
-private:
+	private:
 	double evaluateNode(
 		const std::shared_ptr<Node>& node,
 		double r,
-		const std::vector<Neighbor>* neighbors
+		const std::vector<Neighbor>* neighbors,
+		double r_in,
+		double r_out
 	) const;
 	std::string nodeTypeToString(NodeType type) const;
 	int Size(const std::shared_ptr<Node>& node) const;	
@@ -68,6 +75,7 @@ private:
 		size_t childIndex,
 		std::vector<NodeLocation>& nodes
 	) const;	
+	double smoothingFunction(double r_in, double r_out, double r) const;
 };
 
 
@@ -147,13 +155,18 @@ std::vector<NodeLocation> Tree::CollectNodes() const
 // ==============================
 double Tree::evaluate(double r) const
 {
-	return evaluateNode(root, r, nullptr);
+	return evaluateNode(root, r, nullptr, 0.0, 1.0);
 }
 
 // ==============================
-double Tree::evaluate(double r, const std::vector<Neighbor>& neighbors) const
+double Tree::evaluate(
+	double r,
+	const std::vector<Neighbor>& neighbors,
+	double r_in,
+	double r_out
+) const
 {
-	return evaluateNode(root, r, &neighbors);
+	return evaluateNode(root, r, &neighbors, r_in, r_out);
 }
 
 // ==============================
@@ -205,7 +218,9 @@ std::string Tree::convertToStr() const
 double Tree::evaluateNode(
 	const std::shared_ptr<Node>& node,
 	double r,
-	const std::vector<Neighbor>* neighbors
+	const std::vector<Neighbor>* neighbors,
+	double r_in,
+	double r_out
 ) const
 {
 	if (!node)
@@ -223,17 +238,29 @@ double Tree::evaluateNode(
 		break;
 	}
 
-	if (node->primitive->type == NodeType::Sum)
+	if (node->primitive->type == NodeType::SUM_W ||
+		node->primitive->type == NodeType::SUM_Mo)
 	{
 		if (!neighbors)
 			throw std::runtime_error("Sum primitive requires neighborhood context.");
 		if (node->children.size() != 1)
 			throw std::runtime_error("Sum primitive must have exactly one child.");
 
+		const std::string& neighborType =
+			node->primitive->type == NodeType::SUM_W ? "W" : "Mo";
 		double sum = 0.0;
 		for (const auto& neighbor : *neighbors)
-			sum += evaluateNode(node->children[0], neighbor.distance, neighbors);
-		return sum;
+		{
+			if (neighbor.type == neighborType)
+				sum += evaluateNode(
+					node->children[0],
+					neighbor.distance,
+					neighbors,
+					r_in,
+					r_out
+				);
+		}
+		return sum * smoothingFunction(r_in, r_out, r);
 	}
 
 	std::vector<double> childValues;
@@ -241,7 +268,7 @@ double Tree::evaluateNode(
 
 	for (const auto& child : node->children)
 	{
-		childValues.push_back(evaluateNode(child, r, neighbors));
+		childValues.push_back(evaluateNode(child, r, neighbors, r_in, r_out));
 	}
 
 	return node->primitive->function(childValues);
@@ -259,7 +286,8 @@ std::string Tree::nodeTypeToString(NodeType type) const
 	case NodeType::Var:   return "r";
 	case NodeType::Const: return "Const";
 	case NodeType::Pow:   return "Pow";
-	case NodeType::Sum:   return "Sum";
+	case NodeType::SUM_W:   return "SUM_W";
+	case NodeType::SUM_Mo:   return "SUM_Mo";
 	}
 
 	return "Unknown";
@@ -329,4 +357,26 @@ void Tree::CollectNodes(
 	{
 		CollectNodes(node->children[i], node, i, nodes);
 	}
+}
+
+// =============================
+// smoothing function from:
+// "Fast, accurate, and transferable many-body interatomic
+// potentials by symbolic regression, Alberto Hernandez, 2019"
+// f(r) = (2r^2 - 3r_in^2 + r_out^2) * [(r_out^2 - r^2)^2] / (r_out^2 - r_in^2)^3
+double Tree::smoothingFunction(double r_in, double r_out, double r) const
+{
+		if (r <= r_in)
+			return 1.0;
+		if (r >= r_out)
+			return 0.0;
+
+		const double rSquared = r * r;
+		const double rInSquared = r_in * r_in;
+		const double rOutSquared = r_out * r_out;
+		const double rangeSquared = rOutSquared - rInSquared;
+
+		return (2 * rSquared - 3 * rInSquared + rOutSquared) *
+			std::pow(rOutSquared - rSquared, 2) /
+			std::pow(rangeSquared, 3);
 }

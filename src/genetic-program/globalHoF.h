@@ -1,8 +1,12 @@
 #pragma once
 
-#include <vector>
-#include <array>
+#include <cstdint>
+#include <cstring>
 #include <filesystem>
+#include <limits>
+#include <stdexcept>
+#include <string>
+#include <vector>
 
 #include "mpi.h"
 
@@ -16,22 +20,29 @@ public:
     struct SerializedEntry
     {
         double fitness = std::numeric_limits<double>::infinity();
-        std::array<int, 3> sizes{};
-        std::array<int, 3> depths{};
-        std::array<std::string, 3> trees{};
+        int size_W = 0;
+        int size_Mo = 0;
+        int depth_W = 0;
+        int depth_Mo = 0;
+        std::string tree_W;
+        std::string tree_Mo;
     };
 
     std::vector<SerializedEntry> gatheredHof;  // gathered local HOFs in global hof
 
     static std::string SerializeEntry(const SerializedEntry& entry);
     static std::vector<char> SerializeLocalEntries(const std::vector<SerializedEntry>& localEntries);
-    static std::vector<SerializedEntry> DeserializeLocalEntries(const std::vector<char>& buffer,
-                                                              size_t expectedCount);
+    static std::vector<SerializedEntry> DeserializeLocalEntries(
+        const std::vector<char>& buffer,
+        size_t expectedCount
+    );
 
-    void GatherLocalHOF(int rank,
-                       int worldSize,
-                       int localEntryCount,
-                       const std::vector<Individual>& localHof);
+    void GatherLocalHOF(
+        int rank,
+        int worldSize,
+        int localEntryCount,
+        const std::vector<Individual>& localHof
+    );
 
     void BroadcastGlobalHOF(int rank);
 
@@ -44,7 +55,10 @@ public:
 std::string GlobalHOF::SerializeEntry(const SerializedEntry& entry)
 {
     std::string buffer;
-    buffer.reserve(sizeof(double) + 3 * sizeof(int) + 3 * sizeof(int) + 3 * 4 * sizeof(uint32_t));
+    buffer.reserve(
+        sizeof(double) + 4 * sizeof(int) + 2 * sizeof(uint32_t) +
+        entry.tree_W.size() + entry.tree_Mo.size()
+    );
 
     auto appendValue = [&buffer](const auto& value)
     {
@@ -53,19 +67,17 @@ std::string GlobalHOF::SerializeEntry(const SerializedEntry& entry)
     };
 
     appendValue(entry.fitness);
+    appendValue(entry.size_W);
+    appendValue(entry.size_Mo);
+    appendValue(entry.depth_W);
+    appendValue(entry.depth_Mo);
 
-    for (const auto& value : entry.sizes)
-        appendValue(value);
-
-    for (const auto& value : entry.depths)
-        appendValue(value);
-
-    for (const auto& tree : entry.trees)
-    {
-        const uint32_t len = static_cast<uint32_t>(tree.size());
-        appendValue(len);
-        buffer.append(tree);
-    }
+    const uint32_t lenW = static_cast<uint32_t>(entry.tree_W.size());
+    appendValue(lenW);
+    buffer.append(entry.tree_W);
+    const uint32_t lenMo = static_cast<uint32_t>(entry.tree_Mo.size());
+    appendValue(lenMo);
+    buffer.append(entry.tree_Mo);
 
     return buffer;
 }
@@ -115,24 +127,24 @@ std::vector<GlobalHOF::SerializedEntry> GlobalHOF::DeserializeLocalEntries(const
         };
 
         readValue(entry.fitness);
+        readValue(entry.size_W);
+        readValue(entry.size_Mo);
+        readValue(entry.depth_W);
+        readValue(entry.depth_Mo);
 
-        for (auto& value : entry.sizes)
-            readValue(value);
-
-        for (auto& value : entry.depths)
-            readValue(value);
-
-        for (auto& tree : entry.trees)
+        const auto readTree = [&]()
         {
             uint32_t len = 0;
             readValue(len);
-
             if (pos + len > buffer.size())
                 throw std::runtime_error("Serialized HOF tree string is truncated");
 
-            tree.assign(buffer.data() + pos, buffer.data() + pos + len);
+            std::string tree(buffer.data() + pos, buffer.data() + pos + len);
             pos += len;
-        }
+            return tree;
+        };
+        entry.tree_W = readTree();
+        entry.tree_Mo = readTree();
 
         entries.push_back(entry);
     }
@@ -146,7 +158,8 @@ void GlobalHOF::GatherLocalHOF(
     int rank,
     int worldSize,
     int localEntryCount,
-    const std::vector<Individual>& localHof)
+    const std::vector<Individual>& localHof
+)
 {
     // ------------------------------------------
     // build the serialized local entries
@@ -159,13 +172,13 @@ void GlobalHOF::GatherLocalHOF(
             const auto& ind = localHof[static_cast<size_t>(i)];
             localEntries[static_cast<size_t>(i)].fitness = ind.fitness; // save fitness
 
-            // save trees, sizes, depths
-            for (size_t j = 0; j < ind.trees.size(); ++j)
-            {
-                localEntries[static_cast<size_t>(i)].trees[j] = ind.trees[j].convertToStr();
-                localEntries[static_cast<size_t>(i)].sizes[j] = ind.trees[j].Size();
-                localEntries[static_cast<size_t>(i)].depths[j] = ind.trees[j].Depth();
-            }
+            auto& entry = localEntries[static_cast<size_t>(i)];
+            entry.tree_W = ind.tree_W.convertToStr();
+            entry.tree_Mo = ind.tree_Mo.convertToStr();
+            entry.size_W = ind.tree_W.Size();
+            entry.size_Mo = ind.tree_Mo.Size();
+            entry.depth_W = ind.tree_W.Depth();
+            entry.depth_Mo = ind.tree_Mo.Depth();
         }
         else 
         {
@@ -319,20 +332,12 @@ void GlobalHOF::writeGlobalHOF(int rank, const std::filesystem::path& outputDir)
     {
         hofFileGlobal << "=========== " << cntr << " ===========\n"
             << "Fitness : " << entry.fitness << "\n"
-            << "Size : " << entry.sizes[0] << ", " << entry.sizes[1] << ", "
-            << entry.sizes[2] << "\n"
-            << "Depth : " << entry.depths[0] << ", " << entry.depths[1] << ", "
-            << entry.depths[2] << "\n"
-            << "Potentials : \n";
+            << "W Potential (size : " << entry.size_W << ", Depth : " << entry.depth_W << ")" << "\n"
+            << entry.tree_W << "\n"
+            << "Mo Potential (size : " << entry.size_Mo << ", Depth : " << entry.depth_Mo << ")" << "\n"
+            << entry.tree_Mo << "\n";
 
         cntr++;
-
-
-        const std::array<std::string, 3> names = {"W-W  ", "W-Mo ", "Mo-Mo"};
-        for (size_t i = 0; i < entry.trees.size(); ++i)
-        {
-            hofFileGlobal << names[i] << ") " << entry.trees[i].data() << "\n";
-        }
     }
 
     hofFileGlobal.close();

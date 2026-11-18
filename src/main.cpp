@@ -51,7 +51,7 @@ int main(int argc, char *argv[])
 
     // --------------------------------------
     // DATA
-    XYZParser W_Mo_parser(config.cutoff);
+    XYZParser W_Mo_parser(config.cutoffOut);
     std::vector<Snapshot> W_Mo_data = W_Mo_parser.parse(config.dataPath);
 
     if (config.lastNdata <= 0 || config.lastNdata > static_cast<int>(W_Mo_data.size()))
@@ -84,6 +84,8 @@ int main(int argc, char *argv[])
         config.mutationProb,
         config.tournSelProbability,
         constRange,
+        config.cutoffIn,
+        config.cutoffOut,
         reduced_data,
         config.NdataSample,
         fitnessFun_2elements,

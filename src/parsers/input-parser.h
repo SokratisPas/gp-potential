@@ -6,6 +6,8 @@
 #include <fstream>
 #include <sstream>
 #include <map>
+#include <cmath>
+#include <stdexcept>
 
 struct GPConfig {
     int popSize = 100;
@@ -18,7 +20,8 @@ struct GPConfig {
     double constMax = 10.0;
     int NdataSample = 50;
     int lastNdata = 100;
-    double cutoff = 5.0;
+    double cutoffIn = 3.0;
+    double cutoffOut = 5.0;
     int NlocalInds = 2;
     int NgensToSendInds = 10;
     int NgensToMigration = 20;
@@ -114,7 +117,8 @@ GPConfig loadConfig(const std::filesystem::path& configPath)
     config.constMax = parseDouble(values, "const_max");
     config.NdataSample = parseInt(values, "ndata_sample");
     config.lastNdata = parseInt(values, "last_n_data");
-    config.cutoff = parseDouble(values, "cutoff");
+    config.cutoffIn = parseDouble(values, "cutoffIn");
+    config.cutoffOut = parseDouble(values, "cutoffOut");
     config.NlocalInds = parseInt(values, "n_local_inds");
     config.NgensToSendInds = parseInt(values, "ngens_to_send_inds");
     config.NgensToMigration = parseInt(values, "ngens_to_migration");
@@ -122,6 +126,16 @@ GPConfig loadConfig(const std::filesystem::path& configPath)
     config.NgensToUpd_LHOF = parseInt(values, "NgensToUpd_LHOF");
     config.sizePenaltyFactor = parseDouble(values, "sizePenaltyFactor");
     config.dataPath = requireValue(values, "data_path");
+
+    if (!std::isfinite(config.cutoffIn) ||
+        !std::isfinite(config.cutoffOut) ||
+        config.cutoffIn < 0.0 ||
+        config.cutoffOut <= config.cutoffIn)
+    {
+        throw std::runtime_error(
+            "cutoffIn must be nonnegative and cutoffOut must be greater than cutoffIn."
+        );
+    }
 
     if (values.count("output_dir") != 0)
         config.outputDir = values.at("output_dir");

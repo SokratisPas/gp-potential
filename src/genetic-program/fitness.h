@@ -15,7 +15,10 @@
 
 // -----------------------------------------------
 double fitnessFun_2elements(
-	const std::array<Tree, 3>& trees,
+	const Tree& tree_W,
+	const Tree& tree_Mo,
+	double cutoffIn,
+	double cutoffOut,
 	const std::vector<Snapshot>& data,
 	int dataSample,
 	std::mt19937& rng,
@@ -60,27 +63,29 @@ double fitnessFun_2elements(
 
 				for (const auto& atom : snapshot.atoms)
 				{
+					// use tree based on the atom type
+					const Tree* atomTree = nullptr;
+					if (atom.type == "W")
+						atomTree = &tree_W;
+					else if (atom.type == "Mo")
+						atomTree = &tree_Mo;
+					else
+						throw std::runtime_error("Unsupported atom type: " + atom.type);
+
 					for (const auto& neighbor : atom.neighbors)
 					{
 						double r = neighbor.distance;
 						const std::vector<Neighbor>& neighbors = atom.neighbors;
-						double Vij = 0.0;
-
-						if (atom.type == "W" && neighbor.type == "W")
-							Vij = trees[0].evaluate(r, neighbors);
-						else if (atom.type == "W" && neighbor.type == "Mo")
-							Vij = trees[1].evaluate(r, neighbors);
-						else if (atom.type == "Mo" && neighbor.type == "W")
-							Vij = trees[1].evaluate(r, neighbors);
-						else if (atom.type == "Mo" && neighbor.type == "Mo")
-							Vij = trees[2].evaluate(r, neighbors);
+						const double Vij = atomTree->evaluate(
+							r,
+							neighbors,
+							cutoffIn,
+							cutoffOut
+						);
 
 						EsnapshotTotal += Vij;
 					}
 				}
-
-				// divide by 2 to avoid double counting
-				EsnapshotTotal *= 0.5;
 
 				// we divede by Natoms, bcz energy - Natoms have a linear relationship 
 				energyLossTotal +=
@@ -104,11 +109,7 @@ double fitnessFun_2elements(
 		std::rethrow_exception(evaluationError);
 
 	// calc size penalty
-	int totalSize = 0;
-	for (const auto& tree : trees)
-	{
-		totalSize += tree.Size();
-	}
+	const int totalSize = tree_W.Size() + tree_Mo.Size();
 
 	// each island has different size penalty	
 	double sizePenalty = totalSize * sizePenaltyFactor * (rank + 1);	
