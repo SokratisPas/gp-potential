@@ -1,25 +1,26 @@
 # GP Potential
 
-A parallel genetic-programming framework for discovering symbolic interatomic potentials from DFT data.
+A parallel genetic-programming framework for discovering symbolic interatomic potentials from Density Functional Theory (DFT) data.
 
 ## Overview
 
-This project applies symbolic regression in order to discover an analytic pair potential from reference data. The objective is to evolve expression trees that approximate the systems potential as a function of interatomic distances.
+This project applies symbolic regression in order to discover an analytic potential from reference DFT data. The goal is to evolve some EAM-like potentials to accurately model the W-Mo alloy.
 
 The implementation combines:
 
 - Genetic programming with symbolic regression for potential discovery.
 - MPI-based parallel evolution across multiple worker processes.
 - Island-model migration to maintain diversity.
+- OpenMP implementation for faster fitness calculation.
 - Hall of Fame tracking for the best performing individuals.
-- Training data parsed from atomic configuration files.
+- Training data parsed from extented xyz files.
 
 ## Methodology
 
 The workflow is organized as follows:
 
 1. Parse atomic configurations and reference energies from input data.
-2. Construct interatomic distance features from local neighborhoods.
+2. Construct a neighbor list for each atom on each snapshot.
 3. Evaluate a population of candidate symbolic expressions against the target energy.
 4. Apply evolutionary operators such as crossover and mutation to improve candidate trees.
 5. Use migration between parallel islands and retain best individuals in a Hall of Fame.
