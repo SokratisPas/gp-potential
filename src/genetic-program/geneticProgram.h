@@ -333,7 +333,6 @@ Individual GeneticProgram::DeserializeGlobalEntry(const GlobalHOF::SerializedEnt
     Individual individual;
     individual.fitness = entry.fitness;
     individual.evaluated = true;
-    individual.energyLoss = 0.0;
 
     const auto deserializeTree = [this](const std::string& serializedTree)
     {
@@ -368,7 +367,7 @@ std::shared_ptr<Node> GeneticProgram::GenerateRandomNode(int depth, bool allowSu
 {
     auto node = std::make_shared<Node>();
 
-    // maximum depth reached -> create terminal (var or const)
+    // if maximum depth reached create terminal (var or const)
     if (depth == 0)
     {
         if (RandomNumber(0, 1) == 0)
@@ -385,6 +384,7 @@ std::shared_ptr<Node> GeneticProgram::GenerateRandomNode(int depth, bool allowSu
         return node;
     }
 
+    // max depth is not reached
     // Choose a terminal early 30% of the time else choose a function.
     if (RandomNumber(0.0, 1.0) < 0.3)
     {
@@ -403,6 +403,7 @@ std::shared_ptr<Node> GeneticProgram::GenerateRandomNode(int depth, bool allowSu
     }
 
     // Choose only primitives allowed in this subtree.
+    // no nested summations allowed
     std::vector<const Primitive*> availableFunctions;
     for (const Primitive* function : functions)
     {
@@ -614,9 +615,6 @@ std::pair<Individual, Individual> GeneticProgram::Crossover(
     child1.fitness = std::numeric_limits<double>::infinity();
     child2.fitness = std::numeric_limits<double>::infinity();
 
-    child1.energyLoss = 0.0;
-    child2.energyLoss = 0.0;
-
     return { child1, child2 };
 }
 
@@ -659,7 +657,6 @@ Individual GeneticProgram::MutateSubtree(const Individual& parent)
 
     child.evaluated = false;
     child.fitness = std::numeric_limits<double>::infinity();
-    child.energyLoss = 0.0;
 
     return child;
 }
@@ -725,7 +722,6 @@ Individual GeneticProgram::MutatePoint(const Individual& parent)
 
         child.evaluated = false;
         child.fitness = std::numeric_limits<double>::infinity();
-        child.energyLoss = 0.0;
     }
     return child;
 }
@@ -762,7 +758,6 @@ Individual GeneticProgram::MutateConst(const Individual& parent, int NtestInds)
     Individual bestCandidate = parent;
     bestCandidate.evaluated = false;
     bestCandidate.fitness = std::numeric_limits<double>::infinity();
-    bestCandidate.energyLoss = 0.0;
 
     for (int test = 0; test < NtestInds; ++test)
     {
@@ -802,7 +797,6 @@ Individual GeneticProgram::MutateConst(const Individual& parent, int NtestInds)
 
         candidate.evaluated = false;
         candidate.fitness = std::numeric_limits<double>::infinity();
-        candidate.energyLoss = 0.0;
 
         EvaluateIndividual(candidate);
 
@@ -872,18 +866,16 @@ void GeneticProgram::WriteLocalHOF(const std::filesystem::path& outputDir) const
 
         writtenIndividuals.push_back(&indiv);
 
-        hofFile << "==== Individual: "
-            << writtenCount + 1
-            << " ===="
-            << "\nFitness : "
+        hofFile << "==== Individual: " << writtenCount + 1 << " ===="
+            << "\n== Fitness : "
             << indiv.fitness
             << "\n";
 
-        hofFile << "Tree_W (Size: " << indiv.tree_W.Size() << ")\n"
+        hofFile << "== Tree_W (Size: " << indiv.tree_W.Size() << ")\n"
             << indiv.tree_W.convertToStr() << "\n"
-            << "Tree_Mo (Size: " << indiv.tree_Mo.Size() << ")\n"
+            << "== Tree_Mo (Size: " << indiv.tree_Mo.Size() << ")\n"
             << indiv.tree_Mo.convertToStr() << "\n";
-        hofFile << "\n---------------------------------------\n";
+        hofFile << "---------------------------------------\n";
 
         if (++writtenCount == maxIndividualsToWrite)
             break;
@@ -1207,3 +1199,4 @@ void GeneticProgram::Run()
     }
 
 }
+

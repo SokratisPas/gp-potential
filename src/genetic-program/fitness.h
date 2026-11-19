@@ -45,11 +45,11 @@ double fitnessFun_2elements(
 	#pragma omp parallel reduction(+: energyLossTotal) shared(evaluationError)
 	{
 		#pragma omp for schedule(static)
-		for (std::size_t sampleIndex = 0; sampleIndex < sampledIndices.size(); ++sampleIndex)
+		for (std::size_t snapshotIndex = 0; snapshotIndex < sampledIndices.size(); ++snapshotIndex)
 		{
 			try
 			{
-				const Snapshot& snapshot = data[sampledIndices[sampleIndex]];
+				const Snapshot& snapshot = data[sampledIndices[snapshotIndex]];
 
 				if (snapshot.numberOfAtoms < 1)
 					throw std::runtime_error("Warning: Snapshot has no atoms.");
@@ -76,6 +76,7 @@ double fitnessFun_2elements(
 					{
 						double r = neighbor.distance;
 						const std::vector<Neighbor>& neighbors = atom.neighbors;
+						
 						const double Vij = atomTree->evaluate(
 							r,
 							neighbors,

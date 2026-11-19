@@ -331,10 +331,10 @@ void GlobalHOF::writeGlobalHOF(int rank, const std::filesystem::path& outputDir)
     for (const auto& entry : gatheredHof)
     {
         hofFileGlobal << "=========== " << cntr << " ===========\n"
-            << "Fitness : " << entry.fitness << "\n"
-            << "W Potential (size : " << entry.size_W << ", Depth : " << entry.depth_W << ")" << "\n"
+            << "== Fitness : " << entry.fitness << "\n"
+            << "== W Potential (size : " << entry.size_W << ", Depth : " << entry.depth_W << ")" << "\n"
             << entry.tree_W << "\n"
-            << "Mo Potential (size : " << entry.size_Mo << ", Depth : " << entry.depth_Mo << ")" << "\n"
+            << "== Mo Potential (size : " << entry.size_Mo << ", Depth : " << entry.depth_Mo << ")" << "\n"
             << entry.tree_Mo << "\n";
 
         cntr++;

@@ -23,8 +23,6 @@ public:
 
 	double fitness = std::numeric_limits<double>::infinity();
 
-	double energyLoss = 0.0;
-
 	bool evaluated = false;
 
 	// in "GeneticProgram::ReplaceInd" we use "std::find"
@@ -41,7 +39,6 @@ bool Individual::operator==(const Individual& other) const
 	return tree_W == other.tree_W
 		&& tree_Mo == other.tree_Mo
 		&& fitness == other.fitness
-		&& energyLoss == other.energyLoss
 		&& evaluated == other.evaluated;
 }
 
