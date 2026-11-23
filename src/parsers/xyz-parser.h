@@ -37,7 +37,8 @@ struct Snapshot
     Vec3 box;
     std::vector<Atom> atoms;
     std::string configType;
-    double energy;
+    double energy;  // total potential energy of the snapshot
+                    // we compare with the sum of the energies for each individual
 };
 
 // =============================================================
