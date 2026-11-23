@@ -2,15 +2,6 @@
 
 #include "treeClass.h"
 
-
-// --------------------------------------------------------
-// individual type
-enum class IndType {
-	A,
-	B
-};
-
-
 // --------------------------------------------------------
 // Individual class
 class Individual {

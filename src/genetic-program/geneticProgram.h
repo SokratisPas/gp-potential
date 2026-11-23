@@ -166,9 +166,16 @@ private:
     Individual MutateSubtree(const Individual& parent);
     Individual MutatePoint(const Individual& parent);
     Individual MutateConst(const Individual& parent, int NtestInds);
-    std::shared_ptr<Node> GenerateRandomNode(int depth, bool allowSum = true);
+    std::shared_ptr<Node> GenerateRandomNode(
+        int depth,
+        bool allowSum = true,
+        bool allowVar = false
+    );
     bool HasNestedSum(const std::shared_ptr<Node>& node, bool insideSum = false) const;
     bool HasNestedSum(const Individual& individual) const;
+    bool HasVarOutsideSum(const std::shared_ptr<Node>& node, bool insideSum = false) const;
+    bool HasVarOutsideSum(const Individual& individual) const;
+    bool IsInsideSum(const std::shared_ptr<Node>& root, const Node* target, bool insideSum = false) const;
     void ReplaceInd(const Individual& newInd, int index);
     void SortPopulation();
     bool IsWithinMaxDepth(const Individual& individual) const;
@@ -363,24 +370,30 @@ Individual GeneticProgram::DeserializeGlobalEntry(const GlobalHOF::SerializedEnt
 }
 
 // ================================
-std::shared_ptr<Node> GeneticProgram::GenerateRandomNode(int depth, bool allowSum)
+std::shared_ptr<Node> GeneticProgram::GenerateRandomNode(
+    int depth,
+    bool allowSum,
+    bool allowVar
+)
 {
     auto node = std::make_shared<Node>();
-
-    // if maximum depth reached create terminal (var or const)
-    if (depth == 0)
+    const auto assignRandomTerminal = [this, &node, allowVar]()
     {
-        if (RandomNumber(0, 1) == 0)
+        if (allowVar && RandomNumber(0, 1) == 0)
         {
             node->primitive = &Var;
         }
         else
         {
             node->primitive = &Const;
-
             node->constant = RandomNumber(constRange.first, constRange.second);
         }
+    };
 
+    // Variables are only allowed in a sum's child subtree.
+    if (depth == 0)
+    {
+        assignRandomTerminal();
         return node;
     }
 
@@ -388,17 +401,7 @@ std::shared_ptr<Node> GeneticProgram::GenerateRandomNode(int depth, bool allowSu
     // Choose a terminal early 30% of the time else choose a function.
     if (RandomNumber(0.0, 1.0) < 0.3)
     {
-        if (RandomNumber(0, 1) == 0)
-        {
-            node->primitive = &Var;
-        }
-        else
-        {
-            node->primitive = &Const;
-
-            node->constant = RandomNumber(constRange.first, constRange.second);
-        }
-
+        assignRandomTerminal();
         return node;
     }
 
@@ -425,7 +428,11 @@ std::shared_ptr<Node> GeneticProgram::GenerateRandomNode(int depth, bool allowSu
     for (int i = 0; i < node->primitive->arity; i++)
     {
         const bool allowChildSum = allowSum && !isSumNode;
-        node->children.push_back(GenerateRandomNode(depth - 1, allowChildSum));
+        node->children.push_back(GenerateRandomNode(
+            depth - 1,
+            allowChildSum,
+            allowVar || isSumNode
+        ));
     }
 
     return node;
@@ -463,6 +470,60 @@ bool GeneticProgram::HasNestedSum(const Individual& individual) const
 }
 
 // ================================
+bool GeneticProgram::HasVarOutsideSum(
+    const std::shared_ptr<Node>& node,
+    bool insideSum
+) const
+{
+    if (!node || !node->primitive)
+        return false;
+
+    const bool isSum =
+        node->primitive->type == NodeType::SUM_W ||
+        node->primitive->type == NodeType::SUM_Mo;
+    if (node->primitive->type == NodeType::Var && !insideSum)
+        return true;
+
+    for (const auto& child : node->children)
+    {
+        if (HasVarOutsideSum(child, insideSum || isSum))
+            return true;
+    }
+
+    return false;
+}
+
+// ================================
+bool GeneticProgram::HasVarOutsideSum(const Individual& individual) const
+{
+    return HasVarOutsideSum(individual.tree_W.root) ||
+        HasVarOutsideSum(individual.tree_Mo.root);
+}
+
+// ================================
+bool GeneticProgram::IsInsideSum(
+    const std::shared_ptr<Node>& root,
+    const Node* target,
+    bool insideSum
+) const
+{
+    if (!root || !root->primitive)
+        return false;
+    if (root.get() == target)
+        return insideSum;
+
+    const bool isSum =
+        root->primitive->type == NodeType::SUM_W ||
+        root->primitive->type == NodeType::SUM_Mo;
+    for (const auto& child : root->children)
+    {
+        if (IsInsideSum(child, target, insideSum || isSum))
+            return true;
+    }
+    return false;
+}
+
+// ================================
 void GeneticProgram::InitializePopulation()
 {
     population.clear();
@@ -488,6 +549,9 @@ void GeneticProgram::InitializePopulation()
 // ================================
 void GeneticProgram::EvaluateIndividual(Individual& individual)
 {
+    if (HasVarOutsideSum(individual))
+        throw std::runtime_error("Individual contains a Var primitive outside a Sum primitive.");
+
     if (individual.evaluated)   // already evaluated fitness
         return;
 
@@ -602,9 +666,13 @@ std::pair<Individual, Individual> GeneticProgram::Crossover(
         else
             point2.parent->children[point2.childIndex] = subtree1;
 
-        if (child1Tree.Depth() > maxDepth || HasNestedSum(child1Tree.root))
+        if (child1Tree.Depth() > maxDepth ||
+            HasNestedSum(child1Tree.root) ||
+            HasVarOutsideSum(child1Tree.root))
             child1Tree = parent1Tree.Clone();
-        if (child2Tree.Depth() > maxDepth || HasNestedSum(child2Tree.root))
+        if (child2Tree.Depth() > maxDepth ||
+            HasNestedSum(child2Tree.root) ||
+            HasVarOutsideSum(child2Tree.root))
             child2Tree = parent2Tree.Clone();
     }
 
@@ -644,14 +712,21 @@ Individual GeneticProgram::MutateSubtree(const Individual& parent)
             return parent;
 
         NodeLocation point = nodes[RandomNumber(size_t{0}, nodes.size() - 1)];
-        auto newSubtree = GenerateRandomNode(RandomNumber(1, 3));
+        const bool insideSum = IsInsideSum(childTree.root, point.node.get());
+        auto newSubtree = GenerateRandomNode(
+            RandomNumber(1, 3),
+            !insideSum,
+            insideSum
+        );
 
         if (point.parent == nullptr)
             childTree.root = newSubtree;
         else
             point.parent->children[point.childIndex] = newSubtree;
 
-        if (childTree.Depth() > maxDepth || HasNestedSum(childTree.root))
+        if (childTree.Depth() > maxDepth ||
+            HasNestedSum(childTree.root) ||
+            HasVarOutsideSum(childTree.root))
             return parent;
     }
 
@@ -953,7 +1028,9 @@ void GeneticProgram::performMigration()
         const int replaceIndex = individualIndices[static_cast<size_t>(i)];
         Individual incoming =
             DeserializeGlobalEntry(incomingEntries[static_cast<size_t>(i)]);
-        if (IsWithinMaxDepth(incoming) && !HasNestedSum(incoming))
+        if (IsWithinMaxDepth(incoming) &&
+            !HasNestedSum(incoming) &&
+            !HasVarOutsideSum(incoming))
             population[static_cast<size_t>(replaceIndex)] = std::move(incoming);
     }
     
