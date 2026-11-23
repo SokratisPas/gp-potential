@@ -44,7 +44,7 @@ double fitnessFun_2elements(
 	// parallel region with openMP
 	#pragma omp parallel reduction(+: energyLossTotal) shared(evaluationError)
 	{
-		#pragma omp for schedule(static)
+		#pragma omp for schedule(dynamic)
 		for (std::size_t snapshotIndex = 0; snapshotIndex < sampledIndices.size(); ++snapshotIndex)
 		{
 			try
