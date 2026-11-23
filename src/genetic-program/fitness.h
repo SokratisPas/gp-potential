@@ -88,11 +88,14 @@ double fitnessFun_2elements(
 					}
 				}
 
-				// we divede by Natoms, bcz energy - Natoms have a linear relationship 
+				// - we divede by Natoms, bcz energy - Natoms have a linear relationship 
+				//   bigger snapshots would contribute bigger errors
+				// - in the dataset we have the total energy of the snapshot
+				//   so we also calculate the total energy as a "sum of all the energy of each atom"
+				// - we calc an EAM type energy so each not a sum excactly like a pair potential
 				energyLossTotal +=
-					((EsnapshotTotal - snapshot.energy) *
-					 (EsnapshotTotal - snapshot.energy))
-					/ static_cast<double>(snapshot.numberOfAtoms);
+					((EsnapshotTotal - snapshot.energy) / static_cast<double>(snapshot.numberOfAtoms)) *
+					((EsnapshotTotal - snapshot.energy) / static_cast<double>(snapshot.numberOfAtoms));
 			}
 			catch (...)
 			{
@@ -115,7 +118,7 @@ double fitnessFun_2elements(
 	// each island has different size penalty	
 	double sizePenalty = totalSize * sizePenaltyFactor * (rank + 1);	
 
-	// Fitness = MSE = sum[(DE ^2)] / Nsnapshots
+	// Fitness = MSE = sum[(DE ^2) / Nsnapshot] / NsampleTotal
 	double fitnessTotal = energyLossTotal / static_cast<double>(sampleCount);
 
 	return fitnessTotal + sizePenalty;
