@@ -35,7 +35,7 @@ cutoffIn = 3.0
 #Number of individuals each island sends to globalHoF
 n_local_inds = 2
 
-#Generations to send individuals to globalHoF
+#Generations to send individuals to globalHoF (and update it)
 ngens_to_send_inds = 20
 
 #Generations to perform migration

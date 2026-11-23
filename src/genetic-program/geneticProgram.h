@@ -112,10 +112,10 @@ private:
     double cutoffOut;
     const std::vector<Snapshot>& data;
     int rank;   // ID of each process
-    int numTasks;          // total number of MPI ranks
+    int numTasks;           // total number of MPI ranks
     GlobalHOF* globalHof;   // shared global HOF container
     int NlocalInds;
-    int NgensToSendInds;
+    int NgensToSendInds;    // send inds to globalHOF and update globalHOF!
     int NgensToMigration;
     int Nmigrants;
     int NgensToUpd_LHOF;
@@ -669,10 +669,7 @@ Individual GeneticProgram::MutatePoint(const Individual& parent)
     child.tree_Mo = parent.tree_Mo.Clone();
 
     bool mutated = false;
-    for (Tree Individual::*treeMember : {
-        &Individual::tree_W,
-        &Individual::tree_Mo
-    })
+    for (Tree Individual::*treeMember : { &Individual::tree_W, &Individual::tree_Mo })
     {
         Tree& childTree = child.*treeMember;
         if (!childTree.root)
