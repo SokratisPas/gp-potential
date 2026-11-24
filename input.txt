@@ -1,10 +1,15 @@
+# =============================================================================
+# Example input file
+# change the parameters according to your case
+# =============================================================================
+#
 #population size, each process has its own island of pop_size individuals
 pop_size = 50
 
 #generations
 gens = 100
 
-#initial depth of trees, full grown method
+#initial depth of trees
 initial_ind_max_depth = 5
 
 #tournament selection size

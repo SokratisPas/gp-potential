@@ -398,8 +398,8 @@ std::shared_ptr<Node> GeneticProgram::GenerateRandomNode(
     }
 
     // max depth is not reached
-    // Choose a terminal early 30% of the time else choose a function.
-    if (RandomNumber(0.0, 1.0) < 0.3)
+    // Choose a terminal early 20% of the time else choose a function.
+    if (RandomNumber(0.0, 1.0) < 0.2)
     {
         assignRandomTerminal();
         return node;
@@ -600,7 +600,9 @@ const Individual& GeneticProgram::TournamentSelection()
         contestants.push_back(RandomNumber(size_t{0}, population.size() - 1));
     }
     
-    std::sort(contestants.begin(), contestants.end(),
+    std::sort(
+        contestants.begin(), 
+        contestants.end(),
         [this](size_t a, size_t b)
         {
             return population[a].fitness < population[b].fitness;
