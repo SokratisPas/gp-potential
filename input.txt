@@ -53,7 +53,7 @@ n_migrants = 20
 NgensToUpd_LHOF = 50
 
 # size penalty factor (each island has different penalty)
-sizePenaltyFactor = 0.015
+sizePenaltyFactor = 0.001
 
 #data path
 data_path = src/data/W-Mo/trainset.xyz
