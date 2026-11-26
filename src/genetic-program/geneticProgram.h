@@ -4,6 +4,7 @@
 #include <functional>
 #include <utility>
 #include <array>
+#include <optional>
 #include <vector>
 #include <algorithm>
 #include <numeric>
@@ -48,14 +49,14 @@ public:
         double cutoffIn,
         double cutoffOut,
         const std::vector<Snapshot>& data,
-        int NdataSample,
+        std::optional<int> NdataSample,
         std::function<double(
             const Tree& tree_W,
             const Tree& tree_Mo,
             double cutoffIn,
             double cutoffOut,
             const std::vector<Snapshot>&,
-            int dataSample,
+            std::optional<int> dataSample,
             std::mt19937& rng,
             int rank,
             double sizePenaltyFactor
@@ -106,7 +107,7 @@ private:
     int tournamentSize;
     double mutationProbability;
     double tournSelProbability;
-    int NdataSample;
+    std::optional<int> NdataSample;
     std::pair<double, double> constRange;
     double cutoffIn;
     double cutoffOut;
@@ -145,7 +146,7 @@ private:
         double cutoffIn,
         double cutoffOut,
         const std::vector<Snapshot>&,
-        int dataSample,
+        std::optional<int> dataSample,
         std::mt19937& rng,
         int rank,
         double sizePenaltyFactor

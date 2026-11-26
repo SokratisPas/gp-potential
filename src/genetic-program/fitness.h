@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <exception>
 #include <numeric>
+#include <optional>
 #include <random>
 #include <stdexcept>
 #include <vector>
@@ -20,23 +21,24 @@ double fitnessFun_2elements(
 	double cutoffIn,
 	double cutoffOut,
 	const std::vector<Snapshot>& data,
-	int dataSample,
+	std::optional<int> dataSample,
 	std::mt19937& rng,
 	int rank,
 	double sizePenaltyFactor
 )
 {
-	if (data.empty() || dataSample <= 0)
+	if (data.empty() || (dataSample && *dataSample <= 0))
 		throw std::runtime_error("Error: No data provided or invalid data sample size.");
 
-	// take dataSample random snapshots from data
-	const int sampleCount = std::min(dataSample, static_cast<int>(data.size()));
-
-	std::vector<int> indices(data.size());
-	std::iota(indices.begin(), indices.end(), 0);
-	std::shuffle(indices.begin(), indices.end(), rng);
-
-	std::vector<int> sampledIndices(indices.begin(), indices.begin() + sampleCount);
+	// (to remember: std::optional overloads the * operator, it's not a pointer)
+	const std::size_t sampleCount = dataSample
+		? std::min(static_cast<std::size_t>(*dataSample), data.size())
+		: data.size();
+	std::vector<std::size_t> snapshotIndices(data.size());
+	std::iota(snapshotIndices.begin(), snapshotIndices.end(), 0);
+	if (dataSample)
+		std::shuffle(snapshotIndices.begin(), snapshotIndices.end(), rng);
+	snapshotIndices.resize(sampleCount);
 
 	double energyLossTotal = 0.0;
 	std::exception_ptr evaluationError;
@@ -45,11 +47,11 @@ double fitnessFun_2elements(
 	#pragma omp parallel reduction(+: energyLossTotal) shared(evaluationError)
 	{
 		#pragma omp for schedule(dynamic)
-		for (std::size_t snapshotIndex = 0; snapshotIndex < sampledIndices.size(); ++snapshotIndex)
+		for (std::size_t snapshotIndex = 0; snapshotIndex < snapshotIndices.size(); ++snapshotIndex)
 		{
 			try
 			{
-				const Snapshot& snapshot = data[sampledIndices[snapshotIndex]];
+				const Snapshot& snapshot = data[snapshotIndices[snapshotIndex]];
 
 				if (snapshot.numberOfAtoms < 1)
 					throw std::runtime_error("Warning: Snapshot has no atoms.");

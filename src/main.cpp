@@ -4,6 +4,7 @@
 #include <string>
 #include <functional>
 #include <stdexcept>
+#include <utility>
 
 
 #include "mpi.h"
@@ -46,19 +47,24 @@ int main(int argc, char *argv[])
 
     // load input parameters 
     const GPConfig config = loadConfig(configPath);
-
-    const std::pair<double, double> constRange = { config.constMin, config.constMax };
-
+    
     // --------------------------------------
     // DATA
     XYZParser W_Mo_parser(config.cutoffOut);
     std::vector<Snapshot> W_Mo_data = W_Mo_parser.parse(config.dataPath);
-
-    if (config.lastNdata <= 0 || config.lastNdata > static_cast<int>(W_Mo_data.size()))
+    
+    std::vector<Snapshot> training_data;
+    if (config.lastNdata)
+    {
+        if (*config.lastNdata <= 0 || *config.lastNdata > static_cast<int>(W_Mo_data.size()))
         throw std::runtime_error("last_n_data is out of range for the dataset size");
-
-    // get last data 
-    std::vector<Snapshot> reduced_data(W_Mo_data.end() - config.lastNdata, W_Mo_data.end());
+        
+        training_data.assign(W_Mo_data.end() - *config.lastNdata, W_Mo_data.end());
+    }
+    else
+    {
+        training_data = std::move(W_Mo_data);
+    }
 
     GlobalHOF globalHof;
 
@@ -73,9 +79,9 @@ int main(int argc, char *argv[])
     {
         throw std::runtime_error("Give process number >= 2!\n");
     }
-
+    
     // --------------------------------------
-    // Genetic Program
+    // Genetic Program    
     GeneticProgram geneticProgram(
         config.popSize,
         config.gens,
@@ -83,10 +89,10 @@ int main(int argc, char *argv[])
         config.tournamentSize,
         config.mutationProb,
         config.tournSelProbability,
-        constRange,
+        std::pair<double, double> { config.constMin, config.constMax },
         config.cutoffIn,
         config.cutoffOut,
-        reduced_data,
+        training_data,
         config.NdataSample,
         fitnessFun_2elements,
         rank,

@@ -7,6 +7,7 @@
 #include <sstream>
 #include <map>
 #include <cmath>
+#include <optional>
 #include <stdexcept>
 
 struct GPConfig {
@@ -18,8 +19,8 @@ struct GPConfig {
     double tournSelProbability = 0.7;
     double constMin = -10.0;
     double constMax = 10.0;
-    int NdataSample = 50;
-    int lastNdata = 100;
+    std::optional<int> NdataSample = 50;
+    std::optional<int> lastNdata = 100;
     double cutoffIn = 3.0;
     double cutoffOut = 5.0;
     int NlocalInds = 2;
@@ -92,6 +93,13 @@ int parseInt(const std::map<std::string, std::string>& values, const std::string
     return value;
 }
 
+std::optional<int> parseDataCount(const std::map<std::string, std::string>& values, const std::string& key)
+{
+    if (requireValue(values, key) == "ALL")
+        return std::nullopt;
+    return parseInt(values, key);
+}
+
 double parseDouble(const std::map<std::string, std::string>& values, const std::string& key)
 {
     std::stringstream ss(requireValue(values, key));
@@ -115,8 +123,8 @@ GPConfig loadConfig(const std::filesystem::path& configPath)
     config.tournSelProbability = parseDouble(values, "tournSelProbability");
     config.constMin = parseDouble(values, "const_min");
     config.constMax = parseDouble(values, "const_max");
-    config.NdataSample = parseInt(values, "ndata_sample");
-    config.lastNdata = parseInt(values, "last_n_data");
+    config.NdataSample = parseDataCount(values, "ndata_sample");
+    config.lastNdata = parseDataCount(values, "last_n_data");
     config.cutoffIn = parseDouble(values, "cutoffIn");
     config.cutoffOut = parseDouble(values, "cutoffOut");
     config.NlocalInds = parseInt(values, "n_local_inds");

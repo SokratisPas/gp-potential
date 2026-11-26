@@ -1,6 +1,6 @@
 # GP Potential
 
-A parallel genetic-programming framework for discovering symbolic interatomic potentials from Density Functional Theory (DFT) data.
+A parallel genetic-programming framework for discovering interatomic potentials using symbolic regression from Density Functional Theory (DFT) data.
 
 ## Overview
 
@@ -78,8 +78,8 @@ The solver parameters are defined in [input.txt](input.txt). The settings includ
 | mutation_prob | probability for mutation (crossover probability = 1 - mutation probability) |
 | const_min | minimum size for constants |
 | const_max | maximum size for constatns |
-| ndata_sample | number of data to use for fitness evaluation |
-| last_n_data | using the last number of data for training |
+| ndata_sample | number of snapshots to sample for fitness evaluation, (`int` or `ALL` to use all data) |
+| last_n_data | number of final snapshots to use for training, (`int` or `ALL` to use all data) |
 | cutoffIn | inner cutoff radius |
 | cutoffOut | outer cutoff radius |
 | n_local_inds | number of individuals each island send to HoF |
@@ -89,3 +89,7 @@ The solver parameters are defined in [input.txt](input.txt). The settings includ
 | NgensToUpd_LHOF | number of generations between local HoF file updates |
 | data_path |  data path |
 | output_dir | output directory (already included) |
+
+## References
+This approach is inspired from :
+*Hernandez, A., Balasubramanian, A., Yuan, F. et al. Fast, accurate, and transferable many-body interatomic potentials by symbolic regression. npj Comput Mater 5, 112 (2019). https://doi.org/10.1038/s41524-019-0249-1*
